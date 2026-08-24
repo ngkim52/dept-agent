@@ -6,6 +6,7 @@ type User = { id: string; email: string; name: string; role: string; departmentI
 type Conv = { id: string; title: string; departmentId: string; createdAt: string };
 type Citation = { source?: string; content?: string; similarity?: number };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string; citations?: Citation[]; createdAt: string };
+export type Progress = { phase: "thinking" | "tool" | "tool_done" | "done"; detail?: string; toolName?: string; ok?: boolean; args?: unknown };
 
 /* ---- 부서(페르소나) 표현 ---- */
 const PERSONAS: Record<string, { name: string; mono: string }> = {
@@ -106,18 +107,37 @@ export default function ChatPage() {
   const [pendingCitations, setPendingCitations] = useState<Citation[]>([]);
   const [activeDepartmentId, setActiveDepartmentId] = useState<string>("claims-planning");
   const [activeConvDeptId, setActiveConvDeptId] = useState<string>("");
-  const [showDeptPicker, setShowDeptPicker] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [progress, setProgress] = useState<Progress[]>([]);
+  const [progressOpen, setProgressOpen] = useState(true);
+  const [slashOpen, setSlashOpen] = useState(false);
+  const [slashIdx, setSlashIdx] = useState(0);
+  const [slashItems, setSlashItems] = useState<{ name: string; description: string }[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.json()).then(d => {
       if (!d.user) { router.replace("/"); return; }
       setUser(d.user);
       setActiveDepartmentId(d.user.role === "admin" ? "claims-planning" : (d.user.departmentId ?? ""));
-      if (d.user.role === "admin") setShowDeptPicker(true);
       loadConvs();
     });
+    fetch("/api/skills").then(r => r.json()).then(d => {
+      setSlashItems([...(d.skills ?? []), ...(d.features ?? [])]);
+    }).catch(() => {});
   }, [router]);
+
+  // 요구 1: 사이드바 자동 숨김 (모바일 등 좁은 화면에서 기본 닫힘)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    setSidebarOpen(!mq.matches);
+    const fn = (e: MediaQueryListEvent) => setSidebarOpen(!e.matches);
+    mq.addEventListener("change", fn);
+    return () => mq.removeEventListener("change", fn);
+  }, []);
 
   async function loadConvs() {
     const d = await (await fetch("/api/conversations")).json();
@@ -126,7 +146,7 @@ export default function ChatPage() {
 
   async function newConversation() {
     const isAdmin = user?.role === "admin";
-    if (isAdmin && !activeDepartmentId) { setShowDeptPicker(true); return; }
+    if (isAdmin && !activeDepartmentId) { return; }
     const body = isAdmin ? { departmentId: activeDepartmentId } : {};
     const d = await (await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
     if (d.conversation) { setConvs(prev => [d.conversation, ...prev]); setActiveConvDeptId(d.conversation.departmentId ?? ""); await openConv(d.conversation.id); }
@@ -143,12 +163,36 @@ export default function ChatPage() {
     setStreamText(""); setPendingCitations([]);
   }
 
+  // 요구 2: 대화 삭제
+  async function deleteConv(c: Conv) {
+    if (!confirm(`"${c.title || "새 대화"}" 대화를 삭제할까요?`)) return;
+    await fetch(`/api/conversations/${c.id}`, { method: "DELETE" });
+    setConvs(prev => prev.filter(x => x.id !== c.id));
+    if (activeId === c.id) { setActiveId(null); setMsgs([]); setStreamText(""); }
+  }
+
+  // 요구 8: 파일 업로드 (클릭/드래그) — 사용자별 자료 관리로 저장
+  async function uploadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    for (const file of Array.from(files)) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/documents", { method: "POST", body: fd });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `"${file.name}" 업로드 실패`);
+      }
+    }
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, streamText]);
 
   async function send(textOverride?: string) {
     const text = (textOverride ?? input).trim();
     if (!text || streaming || !activeId) return;
     setInput(""); setStreaming(true); setError(""); setStreamText(""); setPendingCitations([]);
+    setProgress([{ phase: "thinking", detail: "요청을 받았습니다" }]); setProgressOpen(true);
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, role: "user", content: text, createdAt: new Date().toISOString() };
     setMsgs(prev => [...prev, userMsg]);
 
@@ -182,10 +226,19 @@ export default function ChatPage() {
             setStreamText(finalText);
           } else if (eventName === "citations") {
             setPendingCitations(data.chunks ?? []);
+          } else if (eventName === "progress") {
+            // 요구 10: 진행 상황 (thinking/tool) — 완료는 done 이벤트에서 접기
+            const p: Progress = data.phase === "tool" ? { phase: "tool", toolName: data.toolName ?? "", detail: data.args ? `도구 실행: ${data.toolName}` : undefined }
+              : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "" }
+              : data.phase === "done" ? { phase: "done" }
+              : { phase: "thinking", detail: data.detail ?? "생각하는 중입니다" };
+            setProgress(prev => [...prev.filter(x => !(x.phase === "thinking" && p.phase === "tool")), p]);
           } else if (eventName === "done") {
             finalText = data.content ?? finalText;
             setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
             setStreamText(""); setPendingCitations([]);
+            setProgress(prev => [...prev, { phase: "done" }]);
+            setProgressOpen(false);
             loadConvs();
           } else if (eventName === "error") {
             throw new Error(data.error ?? "에이전트 오류");
@@ -195,9 +248,43 @@ export default function ChatPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "요청 실패");
       setStreamText("");
+      setProgress(prev => [...prev, { phase: "done" }]);
+      setProgressOpen(false);
     } finally {
       setStreaming(false);
     }
+  }
+
+  // 요구 6: "/" 슬래시 커맨드 + 요구 7: 입력창 자동 확장 (최대 170px → 스크롤)
+  function resizeInput() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 170) + "px";
+  }
+  function applySlashItem(name: string) {
+    setSlashOpen(false); setSlashIdx(0);
+    if (name === "/자료") { router.push("/documents"); return; }
+    if (name === "/새대화") { void newConversation(); return; }
+    // 스킬은 프롬프트로 넣지 않고 안내만 표시 (부서장은 제공된 스킬을 자동 사용)
+    setInput("");
+    setError(`"${name}" 스킬이 활성화되어 있습니다. 질문을 이어서 입력하세요.`);
+    inputRef.current?.focus();
+  }
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (slashOpen) {
+      if (e.key === "ArrowDown") { e.preventDefault(); setSlashIdx(i => (i + 1) % (slashItems.length || 1)); return; }
+      if (e.key === "ArrowUp") { e.preventDefault(); setSlashIdx(i => (i - 1 + (slashItems.length || 1)) % (slashItems.length || 1)); return; }
+      if (e.key === "Tab" || e.key === "Enter") {
+        e.preventDefault();
+        const item = slashItems[slashIdx] ?? slashItems[0];
+        if (item) applySlashItem(item.name);
+        return;
+      }
+      if (e.key === "Escape") { setSlashOpen(false); setSlashIdx(0); return; }
+    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); return; }
+    if (e.key === "/" && input === "") { setSlashOpen(true); setSlashIdx(0); }
   }
 
   async function logout() {
@@ -220,14 +307,44 @@ export default function ChatPage() {
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden bg-canvas">
+    <div
+      className="relative flex h-screen overflow-hidden bg-canvas"
+      onDragOver={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragOver(true); } }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={e => { if (e.dataTransfer.types.includes("Files")) { e.preventDefault(); setDragOver(false); void uploadFiles(e.dataTransfer.files); } }}
+    >
+      {/* 드래그오버 가이드 (요구 8) */}
+      {dragOver && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 backdrop-blur-sm">
+          <div className="round rounded-2xl border-2 border-dashed border-accent bg-surface px-10 py-8 text-center">
+            <p className="font-serif text-lg font-semibold text-ink">내 자료로 업로드</p>
+            <p className="mt-1 text-xs text-ink-soft">개인 자료 목록에 저장됩니다 · 최대 20MB</p>
+          </div>
+        </div>
+      )}
+
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          title="사이드바 열기"
+          className="absolute left-3 top-3 z-40 flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-surface text-ink-soft shadow-sm transition-colors hover:text-ink"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
+        </button>
+      )}
+
       {/* ── 사이드바 ── */}
+      {sidebarOpen && (
       <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-surface">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
             <p className="font-serif text-lg font-semibold leading-tight">부서장</p>
             <p className="text-xs text-ink-soft">페르소나 에이전트</p>
           </div>
+          <button onClick={() => setSidebarOpen(false)} title="사이드바 접기"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
+          </button>
           <button onClick={logout} title="로그아웃"
             className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
             {I.logout}
@@ -253,7 +370,7 @@ export default function ChatPage() {
         {user?.role === "admin" && (
           <div className="flex gap-1.5 rounded-lg border border-line bg-canvas p-1.5 mx-4 mt-4">
             {Object.entries(PERSONAS).map(([key, p]) => (
-              <button key={key} onClick={() => { setActiveDepartmentId(key); setActiveConvDeptId(""); setShowDeptPicker(false); }}
+              <button key={key} onClick={() => { setActiveDepartmentId(key); setActiveConvDeptId(""); setSlashOpen(false); }}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition-colors ${
                   activeDepartmentId === key ? "bg-ink text-white" : "text-ink-soft hover:bg-accent-soft hover:text-accent"
                 }`}>
@@ -277,13 +394,19 @@ export default function ChatPage() {
 
         <div className="mt-3 flex-1 overflow-y-auto px-3 pb-4">
           {convs.map(c => (
-            <button key={c.id} onClick={() => openConv(c.id)}
-              className={`group relative mb-1 block w-full truncate rounded-lg py-2 pl-4 pr-3 text-left text-sm transition-colors ${
-                c.id === activeId ? "bg-accent-soft font-medium text-accent" : "text-ink-soft hover:bg-canvas hover:text-ink"
+            <div key={c.id} onClick={() => openConv(c.id)}
+              className={`group mb-1 flex cursor-pointer items-center rounded-lg transition-colors ${
+                c.id === activeId ? "bg-accent-soft" : "hover:bg-canvas"
               }`}>
-              {c.id === activeId && <span className="absolute left-1 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-accent" />}
-              {c.title || "새 대화"}
-            </button>
+              <span className={`flex-1 truncate py-2 pl-4 pr-2 text-sm ${c.id === activeId ? "font-medium text-accent" : "text-ink-soft group-hover:text-ink"}`}>
+                {c.title || "새 대화"}
+              </span>
+              <button onClick={(e) => { e.stopPropagation(); void deleteConv(c); }}
+                title="대화 삭제"
+                className="mr-1.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-ink-faint opacity-0 transition-opacity hover:bg-pale-red hover:text-pale-red-text group-hover:opacity-100">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+              </button>
+            </div>
           ))}
         </div>
 
@@ -292,39 +415,6 @@ export default function ChatPage() {
           <p className="font-mono text-[11px] text-ink-faint">{user?.role === "admin" ? "관리자" : "구성원"}</p>
         </div>
       </aside>
-
-      {/* ── 부서 선택 오버레이 (관리자 로그인 시) ── */}
-      {showDeptPicker && user?.role === "admin" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 p-6 backdrop-blur-sm">
-          <div className="rise w-full max-w-md rounded-2xl border border-line bg-surface p-8 shadow-2xl">
-            <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Admin · 부서 선택</p>
-            <h2 className="mt-2 font-serif text-2xl font-semibold tracking-tight text-ink">
-              어느 부서 에이전트를 사용할까요?
-            </h2>
-            <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-              관리자는 로그인 시 담당 부서를 선택할 수 있습니다. 선택한 부서의 부서장 에이전트가 답변합니다.
-            </p>
-            <div className="mt-6 space-y-3">
-              {Object.entries(PERSONAS).map(([key, p]) => (
-                <button key={key}
-                  onClick={async () => {
-                    setActiveDepartmentId(key);
-                    setShowDeptPicker(false);
-                    const isAdmin = true;
-                    const d = await (await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ departmentId: key }) })).json();
-                    if (d.conversation) { setConvs(prev => [d.conversation, ...prev]); setActiveConvDeptId(d.conversation.departmentId ?? ""); await openConv(d.conversation.id); }
-                  }}
-                  className="lift flex w-full items-center gap-4 rounded-xl border border-line bg-canvas px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-soft">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft font-serif text-base font-semibold text-accent">{p.mono}</span>
-                  <span>
-                    <span className="block text-sm font-semibold text-ink">{p.name}</span>
-                    <span className="block text-xs text-ink-soft">{key === "actuarial" ? "보험수리·준비금·요율·건전성" : "심사 절차·지급 기준·사기 리스크"}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ── 본문 ── */}
@@ -348,9 +438,9 @@ export default function ChatPage() {
 
         {/* 메시지 영역 */}
         <div className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="mx-auto max-w-3xl space-y-6">
+          <div className="mx-auto max-w-5xl space-y-6">
             {msgs.length === 0 && !streaming && (
-              <div className="rise mx-auto max-w-xl pt-8">
+              <div className="rise mx-auto max-w-2xl pt-8">
                 <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-line bg-surface text-ink-faint">{I.chat}</span>
                 <h2 className="mt-4 font-serif text-2xl font-semibold tracking-tight text-ink">
                   무슨 일을 검토받고 싶으신가요?
@@ -359,7 +449,7 @@ export default function ChatPage() {
                   작성한 자료나 계획을 첨부 없이도 업무 질문만으로 부서장의 의견을 받을 수 있습니다.
                   내부 기준 자료가 필요하면 안내해 드립니다.
                 </p>
-                <div className="mt-6 space-y-2">
+                <div className="mt-6 grid gap-2 sm:grid-cols-2">
                   {examples.map((ex) => (
                     <button key={ex} onClick={() => send(ex)}
                       className="lift flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-left text-sm text-ink-soft transition-colors hover:bg-accent-soft hover:text-accent">
@@ -410,6 +500,42 @@ export default function ChatPage() {
               )
             ))}
 
+            {/* 요구 10: 진행 상황 패널 (완료 시 자동 접힘, 탭으로 펼침/접기) */}
+            {progress.length > 0 && streaming && (
+              <div className="rise mx-auto max-w-2xl overflow-hidden rounded-xl border border-line bg-surface">
+                <button onClick={() => setProgressOpen(o => !o)}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium text-ink-soft transition-colors hover:bg-canvas">
+                  <span className={`text-ink-faint transition-transform ${progressOpen ? "" : "-rotate-90"}`}>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 9l6 6 6-6" /></svg>
+                  </span>
+                  <span className="flex h-2 w-2 items-center justify-center">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                  </span>
+                  부서장 진행 상황
+                  <span className="font-mono text-[10px] text-ink-faint">· {progress.filter(p => p.phase === "tool").length}개 도구</span>
+                </button>
+                {progressOpen && (
+                  <div className="space-y-1.5 border-t border-line px-4 py-3">
+                    {progress.map((p, i) => (
+                      <div key={i} className="flex items-center gap-2 text-xs">
+                        {p.phase === "done" ? (
+                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-pale-green-text" />
+                        ) : (
+                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                        )}
+                        <span className="font-medium text-ink-soft">
+                          {p.phase === "thinking" ? (p.detail ?? "생각하는 중입니다")
+                            : p.phase === "tool" ? (p.detail ?? `도구 실행: ${p.toolName}`)
+                            : p.phase === "tool_done" ? `도구 완료: ${p.toolName}${p.ok === false ? " (실패)" : ""}`
+                            : "응답 완료"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {streamText && (
               <div className="rise flex items-start gap-3">
                 <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-soft font-serif text-sm font-semibold text-accent">
@@ -434,26 +560,67 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* ── 입력 ── */}
+        {/* ── 입력 (요구 5·6·7·8) ── */}
         <div className="border-t border-line bg-surface px-4 py-4">
-          <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-xl border border-line-strong bg-surface px-3 py-2 transition-colors focus-within:border-accent">
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="부서장에게 물어보세요… (Enter 전송)"
-              rows={1}
-              className="max-h-40 min-h-[2.25rem] flex-1 resize-none bg-transparent py-1.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint"
-            />
-            <button onClick={() => send()} disabled={streaming || !input.trim()}
-              title="보내기"
-              className="lift flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink text-white transition-colors hover:bg-[#33312E] disabled:cursor-not-allowed disabled:opacity-35">
-              {I.arrow}
-            </button>
+          <div className="relative mx-auto max-w-5xl">
+            {/* 요구 6: 슬래시 팔레트 */}
+            {slashOpen && slashItems.length > 0 && (
+              <div className="absolute bottom-full left-0 z-30 mb-2 w-full max-w-md overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
+                <p className="border-b border-line px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-faint">명령 · 사용 가능한 스킬</p>
+                <div className="max-h-64 overflow-y-auto p-1">
+                  {slashItems.map((item, i) => (
+                    <button key={item.name} onClick={() => applySlashItem(item.name)}
+                      onMouseEnter={() => setSlashIdx(i)}
+                      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${i === slashIdx ? "bg-accent-soft" : "hover:bg-canvas"}`}>
+                      <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-xs ${item.name.startsWith("/") ? "bg-accent-soft text-accent" : "bg-pale-green text-pale-green-text"}`}>
+                        {item.name.startsWith("/") ? "/" : "S"}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs font-semibold text-ink">{item.name}</span>
+                        <span className="block truncate text-[11px] text-ink-soft">{item.description}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-end gap-2 rounded-xl border border-line-strong bg-surface px-3 py-2 transition-colors focus-within:border-accent">
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={e => { void uploadFiles(e.target.files); }}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                title="파일 업로드 (내 자료로 저장)"
+                disabled={streaming}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-canvas hover:text-accent disabled:opacity-35"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12.5 12.6 20a5 5 0 0 1-7.1-7.1l7.9-7.9a3.5 3.5 0 1 1 5 5l-8 8a2 2 0 0 1-2.8-2.8l7.3-7.3" /></svg>
+              </button>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => { setInput(e.target.value); setSlashOpen(e.target.value === "/" ? true : slashOpen); if (e.target.value !== "/" && !e.target.value.startsWith("/")) setSlashOpen(false); }}
+                onKeyDown={handleKeyDown}
+                onInput={resizeInput}
+                placeholder="/ 로 명령·스킬 보기 · 파일 드래그 업로드 가능"
+                rows={1}
+                className="max-h-[10.5rem] min-h-[2.25rem] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-sm leading-relaxed text-ink outline-none placeholder:text-ink-faint"
+              />
+              <button onClick={() => send()} disabled={streaming || !input.trim()}
+                title="보내기"
+                className="lift flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink text-white transition-colors hover:bg-[#33312E] disabled:cursor-not-allowed disabled:opacity-35">
+                {I.arrow}
+              </button>
+            </div>
+            <p className="mt-2 font-mono text-[11px] text-ink-faint">
+              답변은 자동 생성됩니다. 업무 판단 전에 내부 기준과 대조해 주세요. · 업로드 파일은 내 자료로 저장됩니다.
+            </p>
           </div>
-          <p className="mx-auto mt-2 max-w-3xl font-mono text-[11px] text-ink-faint">
-            답변은 자동 생성됩니다. 업무 판단 전에 내부 기준과 대조해 주세요.
-          </p>
         </div>
       </main>
     </div>

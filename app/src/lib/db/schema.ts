@@ -52,13 +52,15 @@ export const messages = sqliteTable("messages", {
 
 export const documents = sqliteTable("documents", {
   id: text("id").primaryKey(),
-  userId: text("user_id").notNull().references(() => users.id), // 업로더
-  departmentId: text("department_id").notNull().references(() => departments.id),
+  userId: text("user_id").notNull().references(() => users.id), // 소유자
+  departmentId: text("department_id").references(() => departments.id), // (선택) 부서 연계, 사용자별 관리는 userId 기준
   filename: text("filename").notNull(),
+  mimeType: text("mime_type").notNull().default("application/octet-stream"),
+  size: integer("size").notNull().default(0),
   ragflowDocId: text("ragflow_doc_id"),
   status: text("status", { enum: ["uploaded", "parsing", "done", "failed"] })
     .notNull()
-    .default("uploaded"),
+    .default("done"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

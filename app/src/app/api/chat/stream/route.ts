@@ -67,6 +67,12 @@ export async function POST(req: NextRequest) {
           : "off";
         await runPersonaAgent(persona, message, history, chunks, {
           onTextDelta(delta) { assistantText += delta; send("text_delta", { delta }); },
+          onProgress(ev) {
+            if (ev.type === "thinking") send("progress", { phase: "thinking", detail: ev.detail ?? "생각 중" });
+            else if (ev.type === "tool_start") send("progress", { phase: "tool", toolName: ev.toolName, args: ev.args ?? null });
+            else if (ev.type === "tool_end") send("progress", { phase: "tool_done", toolName: ev.toolName, ok: ev.ok });
+            else if (ev.type === "done") send("progress", { phase: "done" });
+          },
         }, { thinkingLevel });
         const assistantMessageId = randomUUID();
         await db.insert(schema.messages).values({

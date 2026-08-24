@@ -34,8 +34,15 @@ export async function retrieveDepartmentChunks(
   }));
 }
 
+export type ProgressEvent =
+  | { type: "thinking"; detail?: string }
+  | { type: "tool_start"; toolName: string; args?: unknown }
+  | { type: "tool_end"; toolName: string; ok: boolean }
+  | { type: "done" };
+
 export interface StreamCallbacks {
   onTextDelta: (delta: string) => void;
+  onProgress?: (ev: ProgressEvent) => void;
 }
 
 // DB 히스토리를 pi-ai 메시지 형식으로 변환
@@ -108,6 +115,7 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
           messages: [],
         },
       });
+      opts.onToolLog?.({ phase: "before", toolName: "delegate", args: { department: (params as SubAgentParams).department }, ok: true });
       let output = "";
       sub.subscribe((ev) => {
         if (ev.type === "message_update" && ev.assistantMessageEvent?.type === "text_delta") {
@@ -115,6 +123,7 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
         }
       });
       await sub.prompt({ role: "user", content: (params as SubAgentParams).question, timestamp: Date.now() });
+      opts.onToolLog?.({ phase: "after", toolName: "delegate", args: { department: (params as SubAgentParams).department }, ok: true });
       const text = output.trim() || "(서브에이전트 응답 없음)";
       const result: AgentToolResult<{ department: SubAgentDepartment }> = { content: [{ type: "text", text }], details: { department: (params as SubAgentParams).department } };
       return result;
@@ -275,6 +284,15 @@ export async function runPersonaAgent(
       const delta = ev.assistantMessageEvent.delta;
       text += delta;
       cb.onTextDelta(delta);
+    }
+    const et = ev.type as string;
+    if (cb.onProgress && (et === "tool_execution_start" || et === "tool_execution_end" || et === "agent_start" || et === "turn_start" || et === "agent_end")) {
+      cb.onProgress(
+        et === "tool_execution_start" ? { type: "tool_start", toolName: (ev as any).toolName, args: (ev as any).args }
+        : et === "tool_execution_end" ? { type: "tool_end", toolName: (ev as any).toolName, ok: !(ev as any).isError }
+        : et === "agent_start" || et === "turn_start" ? { type: "thinking", detail: et === "turn_start" ? "부서장이 업무를 검토하고 있습니다" : undefined }
+        : { type: "done" }
+      );
     }
   });
 

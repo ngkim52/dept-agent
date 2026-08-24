@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Doc = { id: string; filename: string; status: string; uploadedBy: string | null; ragflowDocId: string | null; createdAt: string };
+type Doc = { id: string; filename: string; status: string; uploadedBy: string | null; ragflowDocId: string | null; createdAt: string; size?: number };
 
 const STATUS_UI: Record<string, { label: string; cls: string; pulse?: boolean }> = {
   done: { label: "검색 가능", cls: "bg-pale-green text-pale-green-text" },
@@ -57,6 +57,15 @@ export default function DocumentsPage() {
     return () => clearInterval(t);
   }, [hasPending]);
 
+  // 요구 4·8: 삭제 (사용자별 소유 문서만)
+  async function deleteDoc(id: string) {
+    if (!confirm("이 문서를 삭제할까요?")) return;
+    setError("");
+    const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+    if (!res.ok) { setError("삭제에 실패했습니다."); return; }
+    await load();
+  }
+
   async function uploadFile(file: File) {
     setError("");
     if (file.size > MAX_SIZE_MB * 1024 * 1024) { setError(`${MAX_SIZE_MB}MB 이하 파일만 업로드할 수 있습니다.`); return; }
@@ -95,8 +104,8 @@ export default function DocumentsPage() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">자료 · 문서</p>
-            <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-ink">부서 자료실</h1>
-            <p className="mt-1 text-sm text-ink-soft">업로드한 자료는 소속 부서 데이터셋에 등록되어 부서장 답변의 근거로 쓰입니다.</p>
+            <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-ink">내 자료</h1>
+            <p className="mt-1 text-sm text-ink-soft">업로드한 자료는 회원 본인에게만 보이며, 삭제할 수 있습니다.</p>
           </div>
           <div className="flex items-center gap-2">
             {hasPending && (
@@ -142,7 +151,7 @@ export default function DocumentsPage() {
             <div className="px-5 py-10 text-center text-sm text-ink-faint">불러오는 중…</div>
           ) : docs.length === 0 ? (
             <div className="px-5 py-14 text-center text-sm text-ink-soft">
-              아직 업로드한 자료가 없습니다. 첫 문서는 부서 데이터셋을 자동으로 만들어 연결합니다.
+              아직 업로드한 자료가 없습니다.
             </div>
           ) : (
             <ul className="divide-y divide-line">
@@ -163,6 +172,11 @@ export default function DocumentsPage() {
                       {st.pulse && <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
                       {st.label}
                     </span>
+                    <button onClick={() => void deleteDoc(d.id)}
+                      title="문서 삭제"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-pale-red hover:text-pale-red-text">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+                    </button>
                   </li>
                 );
               })}
