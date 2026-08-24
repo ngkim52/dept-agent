@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetDb } from "./helpers";
+import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { toPiHistory, runPersonaAgent } from "@/lib/agent/engine";
 import { getPersona } from "@/lib/agent/personas";
 import type { Message as DbMessage } from "@/lib/db/schema";
@@ -7,9 +8,8 @@ import type { Message as DbMessage } from "@/lib/db/schema";
 const mocks = vi.hoisted(() => ({ streamFn: vi.fn() }));
 vi.mock("@/lib/agent/llm", () => ({
   getLlmModel: vi.fn(async () => ({
-    models: { stream: mocks.streamFn },
+    models: { streamSimple: mocks.streamFn },
     model: { id: "deepseek-v4-flash" },
-    modelsStore: { getProvider: () => undefined },
   })),
 }));
 vi.mock("@/lib/ragflow/client", () => ({
@@ -38,8 +38,12 @@ describe("runPersonaAgent", () => {
   beforeEach(async () => {
     await resetDb();
     mocks.streamFn.mockReset();
-    mocks.streamFn.mockImplementation(async function* () {
-      yield { type: "text_delta", delta: "안녕" };
+    mocks.streamFn.mockImplementation(() => {
+      const s = createAssistantMessageEventStream();
+      s.push({ type: "start", partial: { role: "assistant", content: [], api: "openai-completions", provider: "litellm", model: "deepseek-v4-flash", stopReason: "in_progress", timestamp: Date.now() } as any });
+      s.push({ type: "text_delta", contentIndex: 0, delta: "안녕", partial: { role: "assistant", content: [{ type: "text", text: "안녕" }], api: "openai-completions", provider: "litellm", model: "deepseek-v4-flash", stopReason: "in_progress", timestamp: Date.now() } as any });
+      s.end({ role: "assistant", content: [{ type: "text", text: "안녕" }], api: "openai-completions", provider: "litellm", model: "deepseek-v4-flash", stopReason: "stop", timestamp: Date.now() } as any);
+      return s;
     });
   });
 
@@ -54,12 +58,17 @@ describe("runPersonaAgent", () => {
       { onTextDelta: (d) => { text += d; } }
     );
     expect(text).toBe("안녕");
-    const ctx = mocks.streamFn.mock.calls[0][1] as { systemPrompt: string; messages: Array<{ role: string; content: unknown }> };
+    // Agent 내부에서 streamFn 호출: context.messages는 llmMessages로 변환된 목록으로
+    // 히스토리 user + assistant + 현재 질문(1회) = 총 3개
+    expect(mocks.streamFn).toHaveBeenCalled();
+    const ctx = mocks.streamFn.mock.calls[0][1] as { systemPrompt: string; messages: Array<{ role: string; content: string }> };
     expect(ctx.systemPrompt).toContain("보험금심사기획 부서장");
     const msgs = ctx.messages;
-    // 이전 user + 이전 assistant + 현재 user 정확히 3개, 현재 질문 텍스트는 1번만 등장
     expect(msgs.filter((m) => m.role === "user")).toHaveLength(2);
-    const userContents = msgs.filter((m) => m.role === "user").map((m) => String(m.content));
+    const userContents = msgs.filter((m) => m.role === "user").map((m) => {
+      const c = m.content as any;
+      return typeof c === "string" ? c : (Array.isArray(c) ? c.map((x: any) => x.text ?? "").join("") : String(c));
+    });
     expect(userContents[0]).toBe("이전 질문");
     expect(userContents[1]).toContain("[질문/업무 내용]\n지금 질문입니다");
     expect(userContents[1]).toContain("<<<RAG_CONTEXT>>>");

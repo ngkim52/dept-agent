@@ -15,15 +15,16 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.84.2",
-    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-agent-core": "file:vendor/pi-agent-core",
+    "@earendil-works/pi-ai": "file:vendor/pi-ai",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@earendil-works/pi-telemetry": "file:vendor/pi-telemetry"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
