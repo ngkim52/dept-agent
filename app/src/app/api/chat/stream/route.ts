@@ -49,8 +49,27 @@ export async function POST(req: NextRequest) {
     id: randomUUID(), conversationId, role: "user", content: message, createdAt: new Date(),
   });
 
-  // RAGFlow 검색 (부서 데이터셋만)
-  const chunks = await retrieveDepartmentChunks(message, conversation.department.ragflowDatasetId);
+  // "@파일명" 지정 파일: 사용자 소유 문서의 본문을 RAG 컨텍스트로 주입 (개인 자료 우선, 요구 #3)
+  const fileIds: string[] = Array.isArray(body.fileIds) ? body.fileIds.map(String).filter(Boolean) : [];
+  const fileChunks: { content: string; source: string; similarity: number }[] = [];
+  if (fileIds.length > 0) {
+    try {
+      const docs = await db.query.documents.findMany({
+        where: (doc, { and: _and, eq: _eq, inArray }) => _and(_eq(doc.userId, user.id), inArray(doc.id, fileIds.slice(0, 8))),
+      });
+      for (const d of docs) {
+        if (d.content && d.content.trim()) {
+          fileChunks.push({ content: d.content.slice(0, 8000), source: `내 자료: ${d.filename}`, similarity: 1 });
+        }
+      }
+    } catch (e) {
+      console.error("file chunk load error:", e);
+    }
+  }
+
+  // RAGFlow 검색 (부서 데이터셋만) + 지정 파일 본문
+  const ragChunks = await retrieveDepartmentChunks(message, conversation.department.ragflowDatasetId);
+  const chunks = [...fileChunks, ...ragChunks];
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {

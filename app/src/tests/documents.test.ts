@@ -64,6 +64,22 @@ describe("POST /api/documents (사용자별 업로드)", () => {
     expect(data.document.filename).toBe("메모.txt");
     const saved = await db.query.documents.findFirst({ where: (d, { eq }) => eq(d.id, data.document.id) });
     expect(saved?.userId).toBe(u.id);
+    // 텍스트 계열 파일은 본문이 content로 저장되어 "@" 지정 시 LLM 컨텍스트로 주입된다
+    expect(saved?.content).toBe("업무 자료 내용");
+  });
+
+  it("바이너리(비텍스트) 파일은 content 없이 업로드", async () => {
+    const u = await withUser({});
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46])], { type: "application/pdf" }), "doc.pdf");
+    const { POST } = await import("@/app/api/documents/route");
+    const res = await POST(new NextRequest("http://localhost/api/documents", {
+      method: "POST", headers: { Cookie: "dept_session=" + (await session(u)) }, body: form as any,
+    }));
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    const saved = await db.query.documents.findFirst({ where: (d, { eq }) => eq(d.id, data.document.id) });
+    expect(saved?.content).toBeNull();
   });
 
   it("빈 파일/무파일 → 400", async () => {

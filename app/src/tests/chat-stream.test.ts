@@ -39,6 +39,51 @@ describe("POST /api/chat/stream", () => {
     mocks.retrieveFn.mockResolvedValue([]);
   });
 
+  it("fileIds로 지정한 내 자료 본문이 RAG 컨텍스트에 주입되어 citations로 전달", async () => {
+    const u = await withUser({});
+    const { token } = await createSession(u.id);
+    const convId = randomUUID();
+    await db.insert(schema.conversations).values({ id: convId, userId: u.id, departmentId: u.departmentId, title: "새 대화", createdAt: new Date() });
+    const docId = randomUUID();
+    await db.insert(schema.documents).values({
+      id: docId, userId: u.id, departmentId: u.departmentId, filename: "기준.txt",
+      content: "청구금액 100만원 초과 시 추가 심사 필요", ragflowDocId: null, status: "done", createdAt: new Date(),
+    });
+
+    const { POST } = await import("@/app/api/chat/stream/route");
+    const res = await POST(new NextRequest("http://localhost/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `dept_session=${token}` },
+      body: JSON.stringify({ conversationId: convId, message: "기준.txt 내용 요약", fileIds: [docId] }),
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("내 자료: 기준.txt");
+    expect(body).toContain("청구금액 100만원 초과 시 추가 심사 필요");
+  });
+
+  it("타 사용자 문서 id는 무시 (자기 소유만 주입)", async () => {
+    const u = await withUser({});
+    const { token } = await createSession(u.id);
+    const convId = randomUUID();
+    await db.insert(schema.conversations).values({ id: convId, userId: u.id, departmentId: u.departmentId, title: "새 대화", createdAt: new Date() });
+    const other = await withUser({ email: "other2@shinhan.com" });
+    const otherDoc = randomUUID();
+    await db.insert(schema.documents).values({
+      id: otherDoc, userId: other.id, departmentId: other.departmentId ?? "actuarial", filename: "타인.txt",
+      content: "남의 비밀", ragflowDocId: null, status: "done", createdAt: new Date(),
+    });
+
+    const { POST } = await import("@/app/api/chat/stream/route");
+    const res = await POST(new NextRequest("http://localhost/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `dept_session=${token}` },
+      body: JSON.stringify({ conversationId: convId, message: "아무거나", fileIds: [otherDoc] }),
+    }));
+    const body = await res.text();
+    expect(body).not.toContain("남의 비밀");
+  });
+
   it("현재 질문이 LLM 컨텍스트에 중복 없이 1번만 전달되고 SSE로 스트리밍", async () => {
     const u = await withUser({});
     const { token } = await createSession(u.id);

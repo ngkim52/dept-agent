@@ -57,6 +57,7 @@ export const documents = sqliteTable("documents", {
   filename: text("filename").notNull(),
   mimeType: text("mime_type").notNull().default("application/octet-stream"),
   size: integer("size").notNull().default(0),
+  content: text("content"), // 업로드 파일 본문 (텍스트 계열; 사용자별 개인 자료, "@" 지정 시 LLM 컨텍스트로 주입)
   ragflowDocId: text("ragflow_doc_id"),
   status: text("status", { enum: ["uploaded", "parsing", "done", "failed"] })
     .notNull()

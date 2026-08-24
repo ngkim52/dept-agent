@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: `${MAX_SIZE_MB}MB 이하 파일만 업로드할 수 있습니다.` }, { status: 400 });
     }
     const buf = Buffer.from(await file.arrayBuffer());
+    // 텍스트 계열 파일은 본문을 content로 보관 → 채팅에서 "@파일명" 지정 시 LLM 컨텍스트로 주입
+    const isText = /(^text\/)|(\.(txt|md|csv|json|log|xml|ts|tsx|js|jsx|py|sql))$/i.test(file.name);
+    const content = isText ? buf.toString("utf-8").slice(0, 100_000) : null;
     const doc = {
       id: randomUUID(),
       userId: user.id,
@@ -40,6 +43,7 @@ export async function POST(req: NextRequest) {
       filename: file.name,
       mimeType: file.type || "application/octet-stream",
       size: buf.length,
+      content,
       ragflowDocId: null,
       status: "done" as const,
       createdAt: new Date(),
