@@ -1,0 +1,26 @@
+# 부서장 페르소나 에이전트 — 로컬 Docker 실행 예시
+# 사전 준비: app/.env 에 LLM/RAGFlow 설정 후
+#   docker compose up -d --build
+services:
+  dept-agent:
+    build:
+      context: ./app
+    container_name: dept-agent
+    ports:
+      - "3000:3000"
+    environment:
+      - DATA_DIR=/app/data
+      - LLM_BASE_URL=${LLM_BASE_URL:-https://litellm.ax-demo.com/v1}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-deepseek-v4-flash}
+      - RAGFLOW_BASE_URL=${RAGFLOW_BASE_URL:-https://ragflow.ax-demo.com}
+      - RAGFLOW_API_KEY=${RAGFLOW_API_KEY}
+      - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-shinhan.com,shinhanlife.co.kr}
+      - SESSION_COOKIE_NAME=dept_session
+      - COOKIE_SECURE=false
+    volumes:
+      - dept-agent-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  dept-agent-data:

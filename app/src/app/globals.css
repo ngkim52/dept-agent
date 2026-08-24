@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  /* 웜 모노크롬 팔레트 (minimalist-ui) */
+  --color-canvas: #FAFAF9;
+  --color-surface: #FFFFFF;
+  --color-ink: #1C1917;
+  --color-ink-soft: #78716C;
+  --color-ink-faint: #A8A29E;
+  --color-line: #E7E5E4;
+  --color-line-strong: #D6D3D1;
+  /* 단일 수용성 블루 액센트 (신한 계열, 탁한 블루) */
+  --color-accent: #1F6C9F;
+  --color-accent-deep: #155E8C;
+  --color-accent-soft: #E8F1F9;
+  /* 수용성 파스텔 상태색 */
+  --color-pale-green: #EDF3EC;
+  --color-pale-green-text: #346538;
+  --color-pale-amber: #F9F3E3;
+  --color-pale-amber-text: #8A6116;
+  --color-pale-red: #FBE9E9;
+  --color-pale-red-text: #9F2F2D;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+  --font-serif: "Noto Serif KR", "Pretendard Variable", "Apple SD Gothic Neo", serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+html, body {
+  height: 100%;
+}
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-feature-settings: "tnum";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 접근성: 항상 보이는 포커스 링 */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* --- 미세 모션 (minimalist-ui: transform/opacity 만) --- */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+
+.lift {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 0.15s ease;
+}
+.lift:hover { box-shadow: 0 2px 10px rgba(28, 25, 23, 0.06); }
+.lift:active { transform: scale(0.98); }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cursor-blink { animation: blink 1s steps(1) infinite; }
+
+/* 스크롤바 정돈 */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 6px; border: 2px solid var(--color-canvas); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* reduced motion 존중 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

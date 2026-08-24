@@ -1,0 +1,14 @@
+# 부서장 페르소나 에이전트 — 로컬/서버 실행 컴포즈 (RAGFlow/LiteLLM은 별도 서비스)
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - dept-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  dept-data:
