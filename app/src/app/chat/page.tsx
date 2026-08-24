@@ -104,12 +104,17 @@ export default function ChatPage() {
   const [error, setError] = useState("");
   const [streamText, setStreamText] = useState("");
   const [pendingCitations, setPendingCitations] = useState<Citation[]>([]);
+  const [activeDepartmentId, setActiveDepartmentId] = useState<string>("claims-planning");
+  const [activeConvDeptId, setActiveConvDeptId] = useState<string>("");
+  const [showDeptPicker, setShowDeptPicker] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.json()).then(d => {
       if (!d.user) { router.replace("/"); return; }
       setUser(d.user);
+      setActiveDepartmentId(d.user.role === "admin" ? "claims-planning" : (d.user.departmentId ?? ""));
+      if (d.user.role === "admin") setShowDeptPicker(true);
       loadConvs();
     });
   }, [router]);
@@ -120,12 +125,19 @@ export default function ChatPage() {
   }
 
   async function newConversation() {
-    const d = await (await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) })).json();
-    if (d.conversation) { setConvs(prev => [d.conversation, ...prev]); await openConv(d.conversation.id); }
+    const isAdmin = user?.role === "admin";
+    if (isAdmin && !activeDepartmentId) { setShowDeptPicker(true); return; }
+    const body = isAdmin ? { departmentId: activeDepartmentId } : {};
+    const d = await (await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
+    if (d.conversation) { setConvs(prev => [d.conversation, ...prev]); setActiveConvDeptId(d.conversation.departmentId ?? ""); await openConv(d.conversation.id); }
   }
 
   async function openConv(id: string) {
     setActiveId(id);
+    if (!activeConvDeptId) {
+      const cv = convs.find(c => c.id === id);
+      if (cv?.departmentId) setActiveConvDeptId(cv.departmentId);
+    }
     const d = (await (await fetch(`/api/conversations/${id}`)).json()) as { messages: Array<{ id: string; role: "user" | "assistant"; content: string; citations?: string; createdAt: string }> };
     setMsgs(d.messages.map(m => ({ id: m.id, role: m.role, content: m.content, citations: m.citations ? JSON.parse(m.citations) as Citation[] : [], createdAt: m.createdAt })));
     setStreamText(""); setPendingCitations([]);
@@ -193,9 +205,15 @@ export default function ChatPage() {
     router.replace("/");
   }
 
-  const persona = personaOf(user?.departmentId);
+  const effectiveDeptId = activeConvDeptId || (user?.role === "admin" ? activeDepartmentId : user?.departmentId);
+  const persona = personaOf(effectiveDeptId);
 
-  const examples = [
+  const isActuarial = persona === personaOf("actuarial");
+  const examples = isActuarial ? [
+    "준비금 산출 가정(이율·해지율) 검증안을 검토해 주세요",
+    "신상품 요율 산출 시 리스크를 짚어 주세요",
+    "재무건전성(RBC) 분석 방안을 제안해 주세요",
+  ] : [
     "보험금 심사 프로세스 개선안 초안을 검토해 주세요",
     "AI 자동 심사 도입 시 리스크를 짚어 주세요",
     "심사 지연 사유 분석 방안을 제안해 주세요",
@@ -232,6 +250,22 @@ export default function ChatPage() {
           </div>
         </div>
 
+        {user?.role === "admin" && (
+          <div className="flex gap-1.5 rounded-lg border border-line bg-canvas p-1.5 mx-4 mt-4">
+            {Object.entries(PERSONAS).map(([key, p]) => (
+              <button key={key} onClick={() => { setActiveDepartmentId(key); setActiveConvDeptId(""); setShowDeptPicker(false); }}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition-colors ${
+                  activeDepartmentId === key ? "bg-ink text-white" : "text-ink-soft hover:bg-accent-soft hover:text-accent"
+                }`}>
+                <span className={`flex h-5 w-5 items-center justify-center rounded font-serif text-[11px] ${activeDepartmentId === key ? "bg-white/20 text-white" : "bg-accent-soft text-accent"}`}>
+                  {p.mono}
+                </span>
+                {p.name.replace(" 부서장", "")}
+              </button>
+            ))}
+          </div>
+        )}
+
         <button onClick={newConversation}
           className="lift mx-4 mt-3 flex items-center justify-center gap-2 rounded-md bg-ink py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#33312E]">
           {I.plus} 새 대화
@@ -259,6 +293,40 @@ export default function ChatPage() {
         </div>
       </aside>
 
+      {/* ── 부서 선택 오버레이 (관리자 로그인 시) ── */}
+      {showDeptPicker && user?.role === "admin" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-canvas/80 p-6 backdrop-blur-sm">
+          <div className="rise w-full max-w-md rounded-2xl border border-line bg-surface p-8 shadow-2xl">
+            <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Admin · 부서 선택</p>
+            <h2 className="mt-2 font-serif text-2xl font-semibold tracking-tight text-ink">
+              어느 부서 에이전트를 사용할까요?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+              관리자는 로그인 시 담당 부서를 선택할 수 있습니다. 선택한 부서의 부서장 에이전트가 답변합니다.
+            </p>
+            <div className="mt-6 space-y-3">
+              {Object.entries(PERSONAS).map(([key, p]) => (
+                <button key={key}
+                  onClick={async () => {
+                    setActiveDepartmentId(key);
+                    setShowDeptPicker(false);
+                    const isAdmin = true;
+                    const d = await (await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ departmentId: key }) })).json();
+                    if (d.conversation) { setConvs(prev => [d.conversation, ...prev]); setActiveConvDeptId(d.conversation.departmentId ?? ""); await openConv(d.conversation.id); }
+                  }}
+                  className="lift flex w-full items-center gap-4 rounded-xl border border-line bg-canvas px-5 py-4 text-left transition-colors hover:border-accent hover:bg-accent-soft">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft font-serif text-base font-semibold text-accent">{p.mono}</span>
+                  <span>
+                    <span className="block text-sm font-semibold text-ink">{p.name}</span>
+                    <span className="block text-xs text-ink-soft">{key === "actuarial" ? "보험수리·준비금·요율·건전성" : "심사 절차·지급 기준·사기 리스크"}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── 본문 ── */}
       <main className="flex min-w-0 flex-1 flex-col">
         {/* 스레드 헤더 */}
@@ -272,6 +340,9 @@ export default function ChatPage() {
           </div>
           <span className="ml-auto flex items-center gap-1.5 rounded-md bg-pale-green px-2 py-1 font-mono text-[11px] text-pale-green-text">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-pale-green-text" /> 자료 근거 기반
+          </span>
+          <span className="flex items-center gap-1.5 rounded-md bg-accent-soft px-2 py-1 font-mono text-[11px] text-accent">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" /> 업무 스킬 · 자동 압축
           </span>
         </header>
 

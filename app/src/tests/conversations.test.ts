@@ -25,3 +25,46 @@ describe("conversations list", () => {
     expect(data.conversations[0].lastMessage).toBe("최신 답변");
   });
 });
+
+describe("conversations department routing (부서 자동/선택)", () => {
+  beforeEach(async () => { await resetDb(); await withDept(); });
+
+  it("일반 사용자는 가입 부서(departmentId)로 자동 대화 생성", async () => {
+    const u = await withUser({ role: "user", departmentId: "claims-planning" });
+    const { token } = await createSession(u.id);
+    const { POST } = await import("@/app/api/conversations/route");
+    const res = await POST(new NextRequest("http://localhost/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `dept_session=${token}` },
+      body: JSON.stringify({}),
+    }));
+    const data = await res.json();
+    expect(data.conversation).toBeTruthy();
+    expect(data.conversation.departmentId).toBe("claims-planning");
+  });
+
+  it("관리자는 body.departmentId로 부서를 선택해 대화 생성", async () => {
+    const u = await withUser({ role: "admin", departmentId: null });
+    const { token } = await createSession(u.id);
+    const { POST } = await import("@/app/api/conversations/route");
+    const res = await POST(new NextRequest("http://localhost/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `dept_session=${token}` },
+      body: JSON.stringify({ departmentId: "claims-planning" }),
+    }));
+    const data = await res.json();
+    expect(data.conversation.departmentId).toBe("claims-planning");
+  });
+
+  it("관리자가 부서 미지정 시 400", async () => {
+    const u = await withUser({ role: "admin", departmentId: null });
+    const { token } = await createSession(u.id);
+    const { POST } = await import("@/app/api/conversations/route");
+    const res = await POST(new NextRequest("http://localhost/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `dept_session=${token}` },
+      body: JSON.stringify({}),
+    }));
+    expect(res.status).toBe(400);
+  });
+});

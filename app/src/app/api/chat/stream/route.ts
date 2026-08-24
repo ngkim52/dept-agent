@@ -62,9 +62,12 @@ export async function POST(req: NextRequest) {
         }
         send("start", { conversationId });
         send("citations", { chunks: chunks.map(c => ({ content: c.content.slice(0, 120), source: c.source, similarity: Math.round(c.similarity * 1000) / 1000 })) });
+        const thinkingLevel = ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(body.thinkingLevel)
+          ? body.thinkingLevel
+          : "off";
         await runPersonaAgent(persona, message, history, chunks, {
           onTextDelta(delta) { assistantText += delta; send("text_delta", { delta }); },
-        });
+        }, { thinkingLevel });
         const assistantMessageId = randomUUID();
         await db.insert(schema.messages).values({
           id: assistantMessageId,

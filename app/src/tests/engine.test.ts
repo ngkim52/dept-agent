@@ -47,7 +47,7 @@ describe("runPersonaAgent", () => {
     });
   });
 
-  it("히스토리 + 현재 질문(한 번) + RAG 청크로 프롬프트 조립", async () => {
+  it("히스토리 + 현재 질문(한 번) + RAG 청크(transformContext로 주입)", async () => {
     const persona = getPersona("claims-planning")!;
     let text = "";
     await runPersonaAgent(
@@ -58,20 +58,19 @@ describe("runPersonaAgent", () => {
       { onTextDelta: (d) => { text += d; } }
     );
     expect(text).toBe("안녕");
-    // Agent 내부에서 streamFn 호출: context.messages는 llmMessages로 변환된 목록으로
-    // 히스토리 user + assistant + 현재 질문(1회) = 총 3개
     expect(mocks.streamFn).toHaveBeenCalled();
     const ctx = mocks.streamFn.mock.calls[0][1] as { systemPrompt: string; messages: Array<{ role: string; content: string }> };
     expect(ctx.systemPrompt).toContain("보험금심사기획 부서장");
     const msgs = ctx.messages;
-    expect(msgs.filter((m) => m.role === "user")).toHaveLength(2);
+    // RAG(user) + 이전 질문(user) + 현재 질문(user) = user 3건
     const userContents = msgs.filter((m) => m.role === "user").map((m) => {
       const c = m.content as any;
       return typeof c === "string" ? c : (Array.isArray(c) ? c.map((x: any) => x.text ?? "").join("") : String(c));
     });
-    expect(userContents[0]).toBe("이전 질문");
-    expect(userContents[1]).toContain("[질문/업무 내용]\n지금 질문입니다");
-    expect(userContents[1]).toContain("<<<RAG_CONTEXT>>>");
-    expect(userContents[1]).toContain("문서A.pdf");
+    // RAG 컨텍스트가 transformContext로 주입됨
+    expect(userContents.some((u) => u.includes("<<<RAG_CONTEXT>>>") && u.includes("문서A.pdf"))).toBe(true);
+    // 현재 질문은 정확히 1번
+    const q = userContents.filter((u) => u.includes("[질문/업무 내용]\n지금 질문입니다"));
+    expect(q).toHaveLength(1);
   });
 });
