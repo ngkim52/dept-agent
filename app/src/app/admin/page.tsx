@@ -29,10 +29,12 @@ export default function AdminPage() {
   const [modelLoading, setModelLoading] = useState(false);
   const [modelError, setModelError] = useState("");
   const [modelSaved, setModelSaved] = useState("");
-  const [modelDrafts, setModelDrafts] = useState<Record<string, string>>({});
-  const [modelEffective, setModelEffective] = useState<Record<string, string>>({});
+  const [modelDrafts, setModelDrafts] = useState<Record<string, { model: string; gateway: string }>>({});
+  const [modelEffective, setModelEffective] = useState<Record<string, { model: string; gateway: string }>>({});
   const [modelBaseUrl, setModelBaseUrl] = useState("");
   const [modelDefault, setModelDefault] = useState("");
+  const [gateways, setGateways] = useState<{ id: string; label: string; baseUrl: string; hasKey: boolean }[]>([]);
+  const [activeGateway, setActiveGateway] = useState("openrouter");
 
   async function load() {
     const d = await (await fetch("/api/admin/users")).json();
@@ -72,20 +74,28 @@ export default function AdminPage() {
       setModelBaseUrl(d.baseUrl ?? "");
       setModelDefault(d.defaultModel ?? "");
       setModelEffective(d.effective ?? {});
-      const drafts: Record<string, string> = {};
-      for (const k of Object.keys(d.dbValues ?? {})) drafts[k] = (d.dbValues[k] ?? "") || "";
+      setGateways(d.gateways ?? []);
+      if (d.gateways?.length) {
+        const withKey = d.gateways.find((g: any) => g.hasKey);
+        setActiveGateway(withKey?.id ?? d.gateways[0].id);
+      }
+      const drafts: Record<string, { model: string; gateway: string }> = {};
+      for (const k of Object.keys(d.dbValues ?? {})) {
+        const v = d.dbValues[k];
+        if (v && v.model) drafts[k] = { model: v.model, gateway: v.gateway ?? "litellm" };
+      }
       setModelDrafts(drafts);
     } catch { setModelError("설정 조회 실패"); }
   }
 
-  async function loadOpenRouterModels() {
+  async function loadGatewayModels() {
     setModelLoading(true); setModelError(""); setModelSaved("");
     try {
-      const d = await (await fetch("/api/admin/models/openrouter")).json();
+      const d = await (await fetch(`/api/admin/models/openrouter?gateway=${encodeURIComponent(activeGateway)}`)).json();
       if (d.error) { setModelError(d.error); return; }
       setModels(d.models ?? []);
-      if (!d.models?.length) setModelError("모델 목록이 비어있습니다. LLM_API_KEY를 확인해주세요.");
-    } catch { setModelError("OpenRouter 조회 실패"); }
+      if (!d.models?.length) setModelError(`${d.label ?? activeGateway} 모델 목록이 비어있습니다. API 키를 확인해주세요.`);
+    } catch { setModelError(`${activeGateway} 조회 실패`); }
     finally { setModelLoading(false); }
   }
 
@@ -221,18 +231,35 @@ export default function AdminPage() {
             <div>
               <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Admin · 모델 설정</p>
               <h2 className="mt-1 font-serif text-2xl font-semibold tracking-tight text-ink">용도별 LLM 모델</h2>
-              <p className="mt-1 text-sm text-ink-soft">OpenRouter 목록에서 선택하면 즉시 적용됩니다 (환경변수는 기본값).</p>
+              <p className="mt-1 text-sm text-ink-soft">게이트웨이(OpenRouter/LiteLLM) 목록에서 모델을 선택하면 즉시 적용됩니다.</p>
             </div>
             <div className="flex gap-2">
-              <button onClick={loadOpenRouterModels} disabled={modelLoading}
+              <button onClick={loadGatewayModels} disabled={modelLoading}
                 className="lift rounded-md border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-accent-soft hover:text-accent disabled:opacity-50">
-                {modelLoading ? "불러오는 중…" : "OpenRouter 목록 불러오기"}
+                {modelLoading ? "불러오는 중…" : `${gateways.find(g => g.id === activeGateway)?.label ?? activeGateway} 목록 불러오기`}
               </button>
               <button onClick={saveModels}
                 className="lift rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#33312E]">
                 저장
               </button>
             </div>
+          </div>
+
+          {/* 게이트웨이 선택 */}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">게이트웨이</span>
+            {gateways.map(g => (
+              <button key={g.id} onClick={() => { setActiveGateway(g.id); setModels([]); }}
+                className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  activeGateway === g.id
+                    ? "border-ink bg-ink text-white"
+                    : "border-line-strong bg-surface text-ink-soft hover:bg-canvas hover:text-ink"
+                }`}>
+                {g.label}
+                {!g.hasKey && <span className="ml-1 font-mono text-[10px] opacity-70">(키 없음)</span>}
+              </button>
+            ))}
+            {gateways.length === 0 && <span className="text-xs text-ink-faint">게이트웨이 정보 없음</span>}
           </div>
 
           {modelError && <p role="alert" className="mt-4 rounded-md bg-pale-red px-3 py-2 text-xs leading-relaxed text-pale-red-text">{modelError}</p>}
@@ -245,9 +272,11 @@ export default function AdminPage() {
 
           <div className="mt-4 space-y-3">
             {Object.entries(OR_MODELS).map(([key, info]) => {
-              const selected = modelDrafts[key] ?? "";
-              const eff = modelEffective[key] ?? "";
+              const sel = modelDrafts[key];
+              const selected = sel?.model ?? "";
+              const eff = modelEffective[key];
               const cur = models.find(m => m.id === selected);
+              const effLabel = eff?.model ? `${eff.gateway === "openrouter" ? "OR" : "LT"}·${eff.model}` : "(기본값)";
               return (
                 <div key={key} className="rounded-xl border border-line bg-surface p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -258,7 +287,7 @@ export default function AdminPage() {
                     <span className="font-mono text-[10px] text-ink-faint">{info.env}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <select value={selected} onChange={e => setModelDrafts(d => ({ ...d, [key]: e.target.value }))}
+                    <select value={selected} onChange={e => setModelDrafts(d => ({ ...d, [key]: { model: e.target.value, gateway: activeGateway } }))}
                       className="min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-accent">
                       <option value="">(기본값 사용)</option>
                       {models.map(m => (
@@ -272,8 +301,9 @@ export default function AdminPage() {
                     )}
                   </div>
                   <p className="mt-2 font-mono text-[11px] text-ink-faint">
-                    적용 중: <span className="text-ink-soft">{eff || "(기본값)"}</span>
-                    {selected && selected !== eff && <span className="ml-1 text-pale-amber-text">(저장 대기)</span>}
+                    <span className="mr-1 inline-block rounded-full bg-canvas px-1.5 py-0.5 text-[10px]">{gateways.find(g => g.id === activeGateway)?.label ?? activeGateway}</span>
+                    적용 중: <span className="text-ink-soft">{effLabel}</span>
+                    {sel && selected !== (eff?.model ?? "") && <span className="ml-1 text-pale-amber-text">(저장 대기)</span>}
                   </p>
                 </div>
               );

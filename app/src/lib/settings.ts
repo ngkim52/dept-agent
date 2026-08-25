@@ -12,12 +12,11 @@ export const MODEL_PURPOSES = {
 
 export type ModelPurpose = keyof typeof MODEL_PURPOSES;
 
-export async function getSetting(key: string): Promise<string | null> {
+export async function getSetting(key: string): Promise<unknown | null> {
   const row = await db.query.appSettings.findFirst({ where: eq(schema.appSettings.key, key) });
   if (!row) return null;
   try {
-    const v = JSON.parse(row.value);
-    return typeof v === "string" ? v : null;
+    return JSON.parse(row.value);
   } catch { return null; }
 }
 
@@ -27,38 +26,46 @@ export async function setSetting(key: string, value: unknown): Promise<void> {
     .onConflictDoUpdate({ target: schema.appSettings.key, set: { value: JSON.stringify(value), updatedAt: new Date() } });
 }
 
-// 용도별 모델 ID 조회 — DB 설정 우선, env fallback, 최종 fallback 기본 모델
-export async function getModelForPurpose(purpose: ModelPurpose): Promise<string> {
-  const key = MODEL_PURPOSES[purpose].key;
-  if (purpose === "response") {
-    const v = await getSetting(key);
-    if (v) return v;
-    const { config } = await import("@/lib/config");
-    return config.llm.modelResponse || config.llm.model;
-  }
-  if (purpose === "simple") {
-    const v = await getSetting(key);
-    if (v) return v;
-    const { config } = await import("@/lib/config");
-    return config.llm.modelSimple || config.llm.model;
-  }
-  if (purpose === "bulk") {
-    const v = await getSetting(key);
-    if (v) return v;
-    const { config } = await import("@/lib/config");
-    return config.llm.modelBulk || config.llm.model;
-  }
-  const v = await getSetting(key);
-  if (v) return v;
-  const { config } = await import("@/lib/config");
-  return config.llm.modelCompact || config.llm.model;
+export interface ModelSelection {
+  model: string;
+  gateway: string; // "openrouter" | "litellm" | ...
 }
 
-// 현재 용도별 모델 설정 전체 조회 (UI 표시용)
-export async function getAllModelConfig() {
-  const out: Record<string, string | null> = {};
+// 용도별 모델 선택 조회 — DB 설정 우선, env fallback, 최종 fallback 기본 모델(기본 게이트웨이)
+export async function getModelForPurpose(purpose: ModelPurpose): Promise<ModelSelection> {
+  const key = MODEL_PURPOSES[purpose].key;
+  const { config } = await import("@/lib/config");
+  const dbVal = await getSetting(key);
+  if (dbVal && typeof dbVal === "object") {
+    const parsed = dbVal as any;
+    if (parsed && parsed.model) {
+      return { model: String(parsed.model), gateway: String(parsed.gateway ?? "litellm") };
+    }
+  } else if (typeof dbVal === "string" && dbVal) {
+    return { model: dbVal, gateway: "litellm" }; // 구버전 저장 값 호환
+  }
+  const envMap: Record<ModelPurpose, string> = {
+    response: config.llm.modelResponse,
+    simple: config.llm.modelSimple,
+    bulk: config.llm.modelBulk,
+    compact: config.llm.modelCompact,
+  };
+  return { model: envMap[purpose] || config.llm.model, gateway: "litellm" };
+}
+
+// 현재 용도별 모델 선택 전체 조회 (UI 표시용) — DB 값만
+export async function getAllModelConfig(): Promise<Record<string, ModelSelection | null>> {
+  const out: Record<string, ModelSelection | null> = {};
   for (const p of Object.keys(MODEL_PURPOSES) as ModelPurpose[]) {
-    out[p] = await getSetting(MODEL_PURPOSES[p].key);
+    const key = MODEL_PURPOSES[p].key;
+    const v = await getSetting(key);
+    if (!v) { out[p] = null; continue; }
+    if (typeof v === "object") {
+      const parsed = v as any;
+      out[p] = parsed && parsed.model ? { model: String(parsed.model), gateway: String(parsed.gateway ?? "litellm") } : null;
+    } else if (typeof v === "string" && v) {
+      out[p] = { model: v, gateway: "litellm" };
+    } else { out[p] = null; }
   }
   return out;
 }

@@ -2,23 +2,26 @@ import { createModels, createProvider, envApiKeyAuth, InMemoryCredentialStore, I
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { requireLlmConfig } from "@/lib/config";
 
-// LiteLLM/OpenAI 호환 게이트웨이(OpenRouter 포함) → pi-ai 커스텀 프로바이더 등록
-// 특정 모델 ID를 받아 해당 모델만 프로바이더에 등록한다.
-export function buildModels(modelId?: string) {
+// OpenAI 호환 게이트웨이(OpenRouter/LiteLLM) → pi-ai 커스텀 프로바이더 등록
+// gateway: "openrouter" | "litellm" — config.llmGateways에서 baseUrl/키를 찾는다.
+export function buildModels(modelId?: string, gateway: string = "litellm") {
   const c = requireLlmConfig();
   modelId = modelId ?? c.llm.model;
+  const gw = (c as any).llmGateways?.[gateway] ?? c.llmGateways?.litellm;
+  if (!gw || !gw.baseUrl) throw new Error(`게이트웨이 미설정: ${gateway}`);
+  const apiKeyEnv = gateway === "openrouter" ? "OPENROUTER_API_KEY" : "LLM_API_KEY";
   const provider = createProvider({
-    id: "litellm",
-    name: "LiteLLM",
-    baseUrl: c.llm.baseUrl,
-    auth: { apiKey: envApiKeyAuth("LiteLLM", ["LLM_API_KEY"]) },
+    id: gateway,
+    name: gw.label ?? gateway,
+    baseUrl: gw.baseUrl,
+    auth: { apiKey: envApiKeyAuth(gw.label ?? gateway, [apiKeyEnv]) },
     models: [
       {
         id: modelId,
         name: modelId,
         api: "openai-completions",
-        provider: "litellm",
-        baseUrl: c.llm.baseUrl,
+        provider: gateway,
+        baseUrl: gw.baseUrl,
         reasoning: false,
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -41,11 +44,10 @@ export type ModelPurpose = "response" | "simple" | "bulk" | "compact";
 /** 용도별 모델 조회 — DB(UI 설정) 우선, env fallback */
 export async function getLlmModel(purpose: ModelPurpose = "response") {
   const { getModelForPurpose } = await import("@/lib/settings");
-  const c = requireLlmConfig();
-  const modelId = await getModelForPurpose(purpose);
-  if (!modelId) throw new Error(`용도별 모델 미설정: ${purpose}`);
-  const models = buildModels(modelId);
-  const model = models.getModel("litellm", modelId);
-  if (!model) throw new Error(`모델 없음: ${modelId} (용도: ${purpose})`);
+  const sel = await getModelForPurpose(purpose);
+  if (!sel.model) throw new Error(`용도별 모델 미설정: ${purpose}`);
+  const models = buildModels(sel.model, sel.gateway);
+  const model = models.getModel(sel.gateway, sel.model);
+  if (!model) throw new Error(`모델 없음: ${sel.model} (용도: ${purpose}, 게이트웨이: ${sel.gateway})`);
   return { models, model };
 }

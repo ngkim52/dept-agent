@@ -2,15 +2,18 @@ import { NextRequest } from "next/server";
 import { requireUser, requireAdmin, jsonError, HttpError } from "@/lib/auth/http";
 import { config } from "@/lib/config";
 
-// OpenRouter 모델 목록 프록시 — API 키는 서버에만 보관, 클라이언트에 노출하지 않는다
+// 게이트웨이별 모델 목록 프록시 (?gateway=openrouter|litellm)
+// API 키는 서버에만 보관, 클라이언트에 노출하지 않는다
 export async function GET(req: NextRequest) {
   try {
     const admin = await requireUser(req);
     requireAdmin(admin);
-    const base = config.llm.baseUrl || "https://openrouter.ai/api/v1";
-    const apiKey = config.llm.apiKey;
-    if (!apiKey) throw new HttpError(400, "LLM_API_KEY가 설정되어 있지 않습니다. OpenRouter 키를 .env에 넣어주세요.");
-    const res = await fetch(base.replace(/\/$/, "") + "/models", {
+    const gateway = req.nextUrl.searchParams.get("gateway") ?? "openrouter";
+    const gw = (config as any).llmGateways?.[gateway];
+    if (!gw || !gw.baseUrl) throw new HttpError(400, `게이트웨이 미설정: ${gateway}`);
+    const apiKey = gw.apiKey;
+    if (!apiKey) throw new HttpError(400, `${gw.label} API 키가 설정되어 있지 않습니다. .env를 확인해주세요.`);
+    const res = await fetch(gw.baseUrl.replace(/\/$/, "") + "/models", {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       signal: AbortSignal.timeout(15000),
     });
@@ -25,6 +28,6 @@ export async function GET(req: NextRequest) {
       output: m.pricing?.completion ? Number(m.pricing.completion) : 0,
       output_str: m.pricing?.completion ?? "",
     })).sort((a: any, b: any) => (a.input || 999) - (b.input || 999));
-    return Response.json({ models, source: base });
+    return Response.json({ models, source: gw.baseUrl, gateway, label: gw.label });
   } catch (e) { return jsonError(e); }
 }

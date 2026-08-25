@@ -18,6 +18,19 @@ export const config = {
     modelBulk: process.env.LLM_MODEL_BULK ?? "",
     modelCompact: process.env.LLM_MODEL_COMPACT ?? "",
   },
+  // 멀티 게이트웨이 — OpenRouter / LiteLLM 등 OpenAI 호환 엔드포인트 추가 가능
+  llmGateways: {
+    openrouter: {
+      label: "OpenRouter",
+      baseUrl: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
+      apiKey: process.env.OPENROUTER_API_KEY ?? "",
+    },
+    litellm: {
+      label: "LiteLLM",
+      baseUrl: process.env.LLM_BASE_URL ?? "",
+      apiKey: process.env.LLM_API_KEY ?? "",
+    },
+  },
   websearch: {
     serperApiKey: process.env.SERPER_API_KEY ?? "",
     tavilyApiKey: process.env.TAVILY_API_KEY ?? "",
