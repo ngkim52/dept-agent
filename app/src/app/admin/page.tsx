@@ -4,6 +4,15 @@ import { useRouter } from "next/navigation";
 
 type AdminUser = { id: string; email: string; name: string; role: string; status: string; departmentId: string; createdAt: string };
 
+type OrModel = { id: string; name: string; context: number; input: number; input_str: string; output: number; output_str: string };
+
+const OR_MODELS: Record<string, { label: string; desc: string; env: string }> = {
+  response: { label: "부서장 응답·종합 의견", desc: "핵심 답변 품질을 결정합니다", env: "LLM_MODEL_RESPONSE" },
+  simple: { label: "간단 응답·서브에이전트", desc: "부서 위임·간단 QA (반복 호출)", env: "LLM_MODEL_SIMPLE" },
+  bulk: { label: "RAG·대량 데이터", desc: "데이터 해석·검색 요약", env: "LLM_MODEL_BULK" },
+  compact: { label: "컨텍스트 압축", desc: "히스토리 요약 (내부 호출)", env: "LLM_MODEL_COMPACT" },
+};
+
 const STATUS_UI: Record<string, { label: string; cls: string }> = {
   active: { label: "승인됨", cls: "bg-pale-green text-pale-green-text" },
   pending: { label: "대기", cls: "bg-pale-amber text-pale-amber-text" },
@@ -14,6 +23,16 @@ export default function AdminPage() {
   const router = useRouter();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 모델 설정 상태
+  const [models, setModels] = useState<OrModel[]>([]);
+  const [modelLoading, setModelLoading] = useState(false);
+  const [modelError, setModelError] = useState("");
+  const [modelSaved, setModelSaved] = useState("");
+  const [modelDrafts, setModelDrafts] = useState<Record<string, string>>({});
+  const [modelEffective, setModelEffective] = useState<Record<string, string>>({});
+  const [modelBaseUrl, setModelBaseUrl] = useState("");
+  const [modelDefault, setModelDefault] = useState("");
 
   async function load() {
     const d = await (await fetch("/api/admin/users")).json();
@@ -26,6 +45,7 @@ export default function AdminPage() {
       if (!d.user) { router.replace("/"); return; }
       if (d.user.role !== "admin") { router.replace("/chat"); return; }
       load();
+      loadModelConfig();
     });
   }, [router]);
 
@@ -43,6 +63,53 @@ export default function AdminPage() {
     active: users.filter(u => u.status === "active").length,
     rejected: users.filter(u => u.status === "rejected").length,
   }), [users]);
+
+  // ── 모델 설정 ──
+  async function loadModelConfig() {
+    try {
+      const d = await (await fetch("/api/admin/models/config")).json();
+      if (d.error) { setModelError(d.error); return; }
+      setModelBaseUrl(d.baseUrl ?? "");
+      setModelDefault(d.defaultModel ?? "");
+      setModelEffective(d.effective ?? {});
+      const drafts: Record<string, string> = {};
+      for (const k of Object.keys(d.dbValues ?? {})) drafts[k] = (d.dbValues[k] ?? "") || "";
+      setModelDrafts(drafts);
+    } catch { setModelError("설정 조회 실패"); }
+  }
+
+  async function loadOpenRouterModels() {
+    setModelLoading(true); setModelError(""); setModelSaved("");
+    try {
+      const d = await (await fetch("/api/admin/models/openrouter")).json();
+      if (d.error) { setModelError(d.error); return; }
+      setModels(d.models ?? []);
+      if (!d.models?.length) setModelError("모델 목록이 비어있습니다. LLM_API_KEY를 확인해주세요.");
+    } catch { setModelError("OpenRouter 조회 실패"); }
+    finally { setModelLoading(false); }
+  }
+
+  async function saveModels() {
+    setModelSaved(""); setModelError("");
+    try {
+      const res = await fetch("/api/admin/models/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(modelDrafts),
+      });
+      const d = await res.json();
+      if (!res.ok) { setModelError(d.error ?? "저장 실패"); return; }
+      setModelSaved("저장 완료 — 다음 요청부터 적용됩니다");
+      loadModelConfig();
+    } catch { setModelError("저장 실패"); }
+  }
+
+  function modelPrice(m: OrModel | undefined) {
+    if (!m) return "";
+    const i = m.input_str || String(m.input || "");
+    const o = m.output_str || String(m.output || "");
+    return `${i || "?"} / ${o || "?"}`;
+  }
 
   const noActions = users.every(u => u.status === "active");
 
@@ -147,6 +214,76 @@ export default function AdminPage() {
             {noActions ? "모든 신청이 처리되었습니다." : "승인 시 해당 부서의 부서장 페르소나 사용이 가능합니다."}
           </p>
         )}
+
+        {/* ── 모델 설정 ── */}
+        <div className="mt-12 border-t border-line pt-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Admin · 모델 설정</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold tracking-tight text-ink">용도별 LLM 모델</h2>
+              <p className="mt-1 text-sm text-ink-soft">OpenRouter 목록에서 선택하면 즉시 적용됩니다 (환경변수는 기본값).</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={loadOpenRouterModels} disabled={modelLoading}
+                className="lift rounded-md border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-accent-soft hover:text-accent disabled:opacity-50">
+                {modelLoading ? "불러오는 중…" : "OpenRouter 목록 불러오기"}
+              </button>
+              <button onClick={saveModels}
+                className="lift rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#33312E]">
+                저장
+              </button>
+            </div>
+          </div>
+
+          {modelError && <p role="alert" className="mt-4 rounded-md bg-pale-red px-3 py-2 text-xs leading-relaxed text-pale-red-text">{modelError}</p>}
+          {modelSaved && <p className="mt-4 rounded-md bg-pale-green px-3 py-2 text-xs leading-relaxed text-pale-green-text">{modelSaved}</p>}
+
+          <p className="mt-4 font-mono text-[11px] text-ink-faint">
+            게이트웨이: <span className="text-ink-soft">{modelBaseUrl || "(LLM_BASE_URL)"}</span>
+            {" · "}기본 모델: <span className="text-ink-soft">{modelDefault || "(LLM_MODEL)"}</span>
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {Object.entries(OR_MODELS).map(([key, info]) => {
+              const selected = modelDrafts[key] ?? "";
+              const eff = modelEffective[key] ?? "";
+              const cur = models.find(m => m.id === selected);
+              return (
+                <div key={key} className="rounded-xl border border-line bg-surface p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{info.label}</p>
+                      <p className="mt-0.5 text-xs text-ink-soft">{info.desc}</p>
+                    </div>
+                    <span className="font-mono text-[10px] text-ink-faint">{info.env}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <select value={selected} onChange={e => setModelDrafts(d => ({ ...d, [key]: e.target.value }))}
+                      className="min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-accent">
+                      <option value="">(기본값 사용)</option>
+                      {models.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                    {cur && (
+                      <span className="rounded-full bg-canvas px-2.5 py-1 font-mono text-[10px] text-ink-faint">
+                        ${modelPrice(cur)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 font-mono text-[11px] text-ink-faint">
+                    적용 중: <span className="text-ink-soft">{eff || "(기본값)"}</span>
+                    {selected && selected !== eff && <span className="ml-1 text-pale-amber-text">(저장 대기)</span>}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink-faint">
+            API 키는 환경변수(LLM_API_KEY)로만 보관됩니다. UI에는 저장되지 않습니다. 모델 목록은 서버에서 조회됩니다.
+          </p>
+        </div>
       </div>
     </main>
   );

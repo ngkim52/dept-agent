@@ -12,6 +12,11 @@ export const config = {
     baseUrl: process.env.LLM_BASE_URL ?? "",
     apiKey: process.env.LLM_API_KEY ?? "",
     model: process.env.LLM_MODEL ?? "deepseek-v4-flash",
+    // 용도별 모델 (UI 설정 시 DB 값이 우선, env는 fallback)
+    modelResponse: process.env.LLM_MODEL_RESPONSE ?? "",
+    modelSimple: process.env.LLM_MODEL_SIMPLE ?? "",
+    modelBulk: process.env.LLM_MODEL_BULK ?? "",
+    modelCompact: process.env.LLM_MODEL_COMPACT ?? "",
   },
   websearch: {
     serperApiKey: process.env.SERPER_API_KEY ?? "",

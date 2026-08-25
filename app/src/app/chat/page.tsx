@@ -614,7 +614,7 @@ export default function ChatPage() {
           </span>
           <div>
             <p className="text-sm font-semibold text-ink">{persona.name}</p>
-            <p className="text-[11px] text-ink-faint">검증 → 조언 → 아이디어 순으로 답변합니다</p>
+            <p className="text-[11px] text-ink-faint">업무 시 미리 검증, 조언 받기, 결정 프로세스를 경험해보세요!</p>
           </div>
           <span className="ml-auto flex items-center gap-1.5 rounded-md bg-pale-green px-2 py-1 font-mono text-[11px] text-pale-green-text">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-pale-green-text" /> 자료 근거 기반

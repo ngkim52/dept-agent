@@ -2,10 +2,11 @@ import { createModels, createProvider, envApiKeyAuth, InMemoryCredentialStore, I
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { requireLlmConfig } from "@/lib/config";
 
-// LiteLLM 게이트웨이(OpenAI 호환) → pi-ai 커스텀 프로바이더 등록
-export function buildModels() {
+// LiteLLM/OpenAI 호환 게이트웨이(OpenRouter 포함) → pi-ai 커스텀 프로바이더 등록
+// 특정 모델 ID를 받아 해당 모델만 프로바이더에 등록한다.
+export function buildModels(modelId?: string) {
   const c = requireLlmConfig();
-  const modelId = c.llm.model;
+  modelId = modelId ?? c.llm.model;
   const provider = createProvider({
     id: "litellm",
     name: "LiteLLM",
@@ -35,10 +36,16 @@ export function buildModels() {
   return models;
 }
 
-export async function getLlmModel() {
+export type ModelPurpose = "response" | "simple" | "bulk" | "compact";
+
+/** 용도별 모델 조회 — DB(UI 설정) 우선, env fallback */
+export async function getLlmModel(purpose: ModelPurpose = "response") {
+  const { getModelForPurpose } = await import("@/lib/settings");
   const c = requireLlmConfig();
-  const models = buildModels();
-  const model = models.getModel("litellm", c.llm.model);
-  if (!model) throw new Error(`모델 없음: ${c.llm.model}`);
+  const modelId = await getModelForPurpose(purpose);
+  if (!modelId) throw new Error(`용도별 모델 미설정: ${purpose}`);
+  const models = buildModels(modelId);
+  const model = models.getModel("litellm", modelId);
+  if (!model) throw new Error(`모델 없음: ${modelId} (용도: ${purpose})`);
   return { models, model };
 }

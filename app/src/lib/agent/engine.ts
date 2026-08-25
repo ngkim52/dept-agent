@@ -110,11 +110,17 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
       const subPersona = getPersona((params as SubAgentParams).department);
       if (!subPersona) throw new Error(`알 수 없는 부서: ${params.department}`);
       const subPersonaPrompt = buildPersonaSystemPromptWithSkills(subPersona.systemPrompt, getPersonaSkills((params as SubAgentParams).department));
+      // 서브에이전트는 전용 모델("simple") 사용 — UI 설정 가능, 실패 시 메인 모델 fallback
+      let subModel = model;
+      try {
+        const sl = await getLlmModel("simple");
+        subModel = sl.model;
+      } catch { /* simple 전용 모델 미설정 시 메인 모델 사용 */ }
       const sub = new Agent({
         streamFn,
         initialState: {
           systemPrompt: subPersonaPrompt,
-          model,
+          model: subModel,
           thinkingLevel: opts.thinkingLevel ?? "off",
           tools: [],
           messages: [],
@@ -288,16 +294,22 @@ export async function runPersonaAgent(
   cb: StreamCallbacks,
   opts: AgentOptions = {}
 ): Promise<{ text: string }> {
-  const { models, model } = await getLlmModel();
+  const { models, model } = await getLlmModel("response");
   const streamFn = models.streamSimple.bind(models);
 
   // 자동 압축(compact): 히스토리+RAG 부하가 컨텍스트 60% 초과 시 이전 대화를 요약으로 대체
+  // 요약은 전용 compact 모델(UI 설정 가능)을 사용해 메인 응답 모델과 분리한다.
   const contextWindow = (model as any)?.contextWindow ?? 32768;
   const load = estimateContextLoad(history, ragChunks, contextWindow);
   let compactSummary: string | null = null;
   if (shouldAutoCompact(load)) {
     try {
-      compactSummary = await summarizePiHistory(history.slice(0, Math.max(0, history.length - 2)), models, model, Math.floor(contextWindow * 0.2));
+      let compactModels = models, compactModel = model;
+      try {
+        const cl = await getLlmModel("compact");
+        compactModels = cl.models; compactModel = cl.model;
+      } catch { /* compact 전용 모델 실패 시 메인 모델 fallback */ }
+      compactSummary = await summarizePiHistory(history.slice(0, Math.max(0, history.length - 2)), compactModels, compactModel, Math.floor(contextWindow * 0.2));
     } catch {
       compactSummary = null; // 요약 실패 시 전체 히스토리 유지
     }

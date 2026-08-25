@@ -10,6 +10,12 @@ export const departments = sqliteTable("departments", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(), // JSON 문자열 저장
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -66,6 +72,7 @@ export const documents = sqliteTable("documents", {
 });
 
 export type Department = typeof departments.$inferSelect;
+export type AppSetting = typeof appSettings.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
