@@ -511,9 +511,12 @@ export default function ChatPage() {
       {sidebarOpen && (
       <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-surface">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <div>
-            <p className="font-serif text-lg font-semibold leading-tight">부서장</p>
-            <p className="text-xs text-ink-soft">페르소나 에이전트</p>
+          <div className="flex items-center gap-2.5">
+            <img src="/shinhan-life-logo.png" alt="신한라이프" className="h-6 w-auto object-contain" />
+            <div>
+              <p className="font-serif text-lg font-semibold leading-tight">부서장</p>
+              <p className="text-xs text-ink-soft">페르소나 에이전트</p>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} title="사이드바 접기"
             className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">

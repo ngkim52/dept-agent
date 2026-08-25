@@ -32,6 +32,7 @@ export default function LoginPage() {
         <div aria-hidden className="pointer-events-none absolute -top-24 -right-24 h-96 w-96 rounded-full"
           style={{ background: "radial-gradient(circle, rgba(31,108,159,0.07), transparent 70%)" }} />
         <div className="relative">
+          <img src="/shinhan-life-logo.png" alt="신한라이프" className="mb-6 h-8 w-auto object-contain" />
           <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Dept · Agent</p>
           <h1 className="mt-6 font-serif text-5xl font-semibold leading-tight tracking-tight text-ink">
             부서장
