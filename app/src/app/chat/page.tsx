@@ -110,6 +110,7 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [progress, setProgress] = useState<Progress[]>([]);
   const [progressOpen, setProgressOpen] = useState(true);
+  const [expandedIdx, setExpandedIdx] = useState(-1);
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [slashItems, setSlashItems] = useState<{ name: string; description: string }[]>([]);
@@ -209,6 +210,7 @@ export default function ChatPage() {
 
   async function send(textOverride?: string) {
     let text = (textOverride ?? input).trim();
+    let thinkingOpt: string | undefined; // "/생각 <레벨>" 로 지정한 추론 수준
     if (!text || streaming) return;
     // "/스킬명 옵션값" → 스킬명을 명령으로 인식하고 나머지를 실제 질문으로 사용
     const slashMatch = text.match(/^\/([\p{L}\p{N}_-]+)\s*([\s\S]*)$/u);
@@ -221,7 +223,17 @@ export default function ChatPage() {
         text = rest || `/${cmd} 절차를 검토해 주세요.`;
       } else if (cmd === "자료") { router.push("/documents"); return; }
       else if (cmd === "새대화") { await newConversation(); return; }
-      else if (cmd === "생각") { text = rest || "생각 수준을 안내해 주세요."; }
+      else if (cmd === "생각") {
+        // "/생각 high" 같은 옵션 값 → 추론 수준 설정 메시지로 변환
+        const level = rest.toLowerCase();
+        const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+        if (rest && levels.includes(level)) {
+          thinkingOpt = level;
+          text = `추론 수준(thinking)을 ${level}로 설정해 주세요.`;
+        } else {
+          text = rest ? `생각 수준을 ${rest}으로 설정해 주세요.` : "생각 수준을 안내해 주세요. (off/minimal/low/medium/high)";
+        }
+      }
       else if (cmd === "웹검색") { text = rest || "최신 웹 정보를 검색해 주세요."; }
       else if (isFeature) { /* 알려진 기능이면 그대로 전송 */ }
       // 그 외 미지의 "/..." 는 일반 질문으로 전송
@@ -243,7 +255,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: convId, message: text, fileIds }),
+        body: JSON.stringify({ conversationId: convId, message: text, fileIds, ...(thinkingOpt ? { thinkingLevel: thinkingOpt } : {}) }),
       });
       // 전송 시 지정한 파일 참조는 일회성으로 사용 (컨텍스트 중복 방지)
       setFileIds([]);
@@ -272,9 +284,10 @@ export default function ChatPage() {
           } else if (eventName === "citations") {
             setPendingCitations(data.chunks ?? []);
           } else if (eventName === "progress") {
-            // 요구 10: 진행 상황 (thinking/tool) — 완료는 done 이벤트에서 접기
-            const p: Progress = data.phase === "tool" ? { phase: "tool", toolName: data.toolName ?? "", detail: data.args ? `도구 실행: ${data.toolName}` : undefined }
-              : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "" }
+            // 진행 상황 (thinking/tool) — args까지 보존해 확장 시 상세 표시. 완료(done) 후에도 패널은 남긴다.
+            const p: Progress = data.phase === "tool"
+              ? { phase: "tool", toolName: data.toolName ?? "", args: data.args ?? undefined, detail: data.args ? undefined : `도구 실행: ${data.toolName}` }
+              : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "", ok: data.ok ?? true }
               : data.phase === "done" ? { phase: "done" }
               : { phase: "thinking", detail: data.detail ?? "생각하는 중입니다" };
             setProgress(prev => [...prev.filter(x => !(x.phase === "thinking" && p.phase === "tool")), p]);
@@ -282,8 +295,8 @@ export default function ChatPage() {
             finalText = data.content ?? finalText;
             setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
             setStreamText(""); setPendingCitations([]);
+            // 완료 표시는 남기되 패널을 강제로 닫지 않는다 (사용자가 확장/확인 가능)
             setProgress(prev => [...prev, { phase: "done" }]);
-            setProgressOpen(false);
             loadConvs();
           } else if (eventName === "error") {
             throw new Error(data.error ?? "에이전트 오류");
@@ -294,7 +307,6 @@ export default function ChatPage() {
       setError(e instanceof Error ? e.message : "요청 실패");
       setStreamText("");
       setProgress(prev => [...prev, { phase: "done" }]);
-      setProgressOpen(false);
     } finally {
       setStreaming(false);
     }
@@ -327,10 +339,23 @@ export default function ChatPage() {
     setSlashOpen(false); setSlashIdx(0);
     if (name === "/자료") { router.push("/documents"); return; }
     if (name === "/새대화") { void newConversation(); return; }
+    // "/생각" 은 옵션 값(off/minimal/low/medium/high)을 뒤에 붙이도록 안내 + "/생각 " 삽입
+    if (name === "/생각") {
+      setInput("/생각 high");
+      setSlashOpen(false);
+      requestAnimationFrame(() => {
+        // "high" 부분을 드래그 선택해 사용자가 다른 수준으로 바꿀 수 있게
+        const el = inputRef.current;
+        if (el) { el.focus(); el.setSelectionRange("/생각 ".length, "/생각 high".length); resizeInput(); }
+      });
+      return;
+    }
     // 스킬/명령이 "/스킬명 " 형태로 입력창에 삽입된다 → 사용자가 뒤에 옵션 값을 이어 입력
+    // name이 이미 "/"로 시작하면(features) 그대로, 스킬 이름이면 "/"를 붙인다
     const cur = inputRef.current?.value ?? input;
-    const rest = cur.replace(/^\/\w*\s*/, ""); // 기존 "/..." 잔여 제거
-    setInput(`/${name} ${rest}`);
+    const rest = cur.replace(/^\/[\p{L}\p{N}_-]*\s*/u, ""); // 기존 "/..." 잔여 제거
+    const cmd = name.startsWith("/") ? name : `/${name}`;
+    setInput(`${cmd} ${rest}`);
     requestAnimationFrame(() => { inputRef.current?.focus(); resizeInput(); });
   }
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -586,7 +611,7 @@ export default function ChatPage() {
             ))}
 
             {/* 요구 10: 진행 상황 패널 (완료 시 자동 접힘, 탭으로 펼침/접기) */}
-            {progress.length > 0 && streaming && (
+            {progress.length > 0 && (
               <div className="rise mx-auto max-w-2xl overflow-hidden rounded-xl border border-line bg-surface">
                 <button onClick={() => setProgressOpen(o => !o)}
                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium text-ink-soft transition-colors hover:bg-canvas">
@@ -601,21 +626,47 @@ export default function ChatPage() {
                 </button>
                 {progressOpen && (
                   <div className="space-y-1.5 border-t border-line px-4 py-3">
-                    {progress.map((p, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs">
-                        {p.phase === "done" ? (
-                          <span className="inline-block h-1.5 w-1.5 rounded-full bg-pale-green-text" />
-                        ) : (
-                          <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                        )}
-                        <span className="font-medium text-ink-soft">
-                          {p.phase === "thinking" ? (p.detail ?? "생각하는 중입니다")
-                            : p.phase === "tool" ? (p.detail ?? `도구 실행: ${p.toolName}`)
-                            : p.phase === "tool_done" ? `도구 완료: ${p.toolName}${p.ok === false ? " (실패)" : ""}`
-                            : "응답 완료"}
-                        </span>
-                      </div>
-                    ))}
+                    {progress.map((p, i) => {
+                      const label = p.phase === "thinking" ? (p.detail ?? "생각하는 중입니다")
+                        : p.phase === "tool" ? (p.detail ?? `도구 실행: ${p.toolName}`)
+                        : p.phase === "tool_done" ? `도구 완료: ${p.toolName}${p.ok === false ? " (실패)" : ""}`
+                        : "응답 완료";
+                      const hasDetail = p.args !== undefined && p.args !== null;
+                      const isOpen = expandedIdx === i;
+                      return (
+                        <div key={i} className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2 text-xs">
+                            {p.phase === "done" ? (
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-pale-green-text" />
+                            ) : (
+                              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                            )}
+                            {hasDetail && (
+                              <button
+                                onClick={() => setExpandedIdx(isOpen ? -1 : i)}
+                                className="flex h-4 w-4 items-center justify-center rounded text-ink-faint transition-colors hover:bg-canvas hover:text-ink"
+                                title={isOpen ? "접기" : "상세 보기"}
+                              >
+                                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={`transition-transform ${isOpen ? "rotate-180" : ""}`}>
+                                  <path d="M6 9l6 6 6-6" />
+                                </svg>
+                              </button>
+                            )}
+                            <span className="font-medium text-ink-soft">{label}</span>
+                            {hasDetail && !isOpen && (
+                              <button onClick={() => setExpandedIdx(i)} className="ml-auto rounded border border-line px-1.5 py-0.5 text-[10px] text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+                                상세
+                              </button>
+                            )}
+                          </div>
+                          {hasDetail && isOpen && (
+                            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-soft">
+                              {typeof p.args === "string" ? p.args : JSON.stringify(p.args, null, 2)}
+                            </pre>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

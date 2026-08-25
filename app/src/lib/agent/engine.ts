@@ -1,5 +1,7 @@
 import { ragflow } from "@/lib/ragflow/client";
 import { webSearch, formatSearchResults } from "@/lib/agent/websearch";
+import { execPython } from "@/lib/agent/pyexec";
+import { getDepartmentToolNames } from "@/agent-tools";
 import { requireRagConfig, config } from "@/lib/config";
 import { getLlmModel } from "@/lib/agent/llm";
 import { getPersona, type Persona } from "@/lib/agent/personas";
@@ -86,6 +88,8 @@ export interface AgentOptions {
   onToolLog?: (ev: { phase: "before" | "after"; toolName: string; args: unknown; ok: boolean }) => void;
   /** 각 턴 시작 전 시스템 메시지에 RAG 컨텍스트/요약을 주입하는 transformContext 훅 */
   transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
+  /** "@파일명" 으로 지정된 업로드 파일 정보 (경로·이름) — python_data 툴이 직접 읽어 엑셀/CSV 처리 */
+  uploadFiles?: { id: string; filename: string; filePath: string }[];
 }
 
 export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: AgentOptions = {}): AgentTool<any, { department: SubAgentDepartment }> {
@@ -171,13 +175,43 @@ export function makeWebSearchTool(): AgentTool<any, { query: string }> {
   };
 }
 
-/** 상위 PI 에이전트 생성 — 페르소나 + 서브에이전트 위임 + RAG 검색 툴 + 웹 검색 + hooks + 스킬 */
+/** 파이썬 데이터 처리 툴 — 업로드/데이터(엑셀·CSV 등)를 pandas로 집계·가공. 코드는 서버가 생성한 검증된 스크립트를 실행 */
+export function makePythonDataTool(): AgentTool<any, { script: string; data?: string; filePath?: string; description?: string }> {
+  return {
+    name: "python_data",
+    label: "데이터 처리 (파이썬)",
+    description:
+      "부서 업무 데이터(보험금 청구 내역, 요율표, 엑셀/CSV 등)를 pandas로 집계·가공·분석합니다. df(pandas DataFrame)와 input_data(원본 문자열)가 로드된 상태로 스크립트가 실행됩니다. filePath에 업로드 파일 경로(엑셀 .xlsx 등)를 주면 그 파일을 df로 엽니다. script에 파이썬 코드를 넣고 print()로 결과를 출력해야 합니다.",
+    parameters: Type.Object({
+      script: Type.String({ description: "실행할 파이썬 코드. df(pandas DataFrame), input_data(문자열), file_path(문자열) 변수를 사용할 수 있고 print()로 결과 출력." }),
+      data: Type.Optional(Type.String({ description: "분석할 원본 데이터 (CSV/표/텍스트). filePath가 있으면 무시" })),
+      filePath: Type.Optional(Type.String({ description: "업로드 파일 절대 경로 (엑셀/CSV를 직접 열 때). 데이터 문자열 대신 사용" })),
+      description: Type.Optional(Type.String({ description: "수행 중인 작업 설명 (로깅용)" })),
+    }),
+    async execute(toolCallId: string, params: any) {
+      const script = String(params?.script ?? "").trim();
+      const data = String(params?.data ?? "").slice(0, 200_000);
+      const filePath = String(params?.filePath ?? "");
+      if (!script) {
+        return { content: [{ type: "text", text: "스크립트가 비어 있습니다." }], details: { ok: false } } as AgentToolResult<any>;
+      }
+      const r = await execPython({ script, inputData: data, filePath: filePath || undefined });
+      const text = r.ok ? r.stdout : "데이터 처리 실패:\n" + (r.stderr || "");
+      return { content: [{ type: "text", text }], details: { description: params?.description, ok: r.ok } } as AgentToolResult<any>;
+    },
+  };
+}
+
+/** 상위 PI 에이전트 생성 — 페르소나 + 서브에이전트 위임 + RAG 검색 툴 + 웹 검색 + 파이썬 데이터 + hooks + 스킬 */
 export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, history: PiMessage[] = [], opts: AgentOptions = {}, ragDatasetId?: string) {
   const systemPrompt = buildPersonaSystemPromptWithSkills(persona.systemPrompt, getPersonaSkills(persona.key));
-  const tools: AgentTool<any>[] = [makeSubAgentDelegateTool(streamFn, model, opts)];
-  if (ragDatasetId) tools.push(makeRagSearchTool(ragDatasetId));
-  // 웹 검색: 외부 최신 정보 조회 (Serper/Tavily 키 설정 여부와 무관하게 도구 노출, 키 없으면 안내 반환)
-  tools.push(makeWebSearchTool());
+  // 부서별 도구 구성 (src/agent-tools/<부서키>.ts 에서 지정)
+  const toolNames = getDepartmentToolNames(persona.key);
+  const tools: AgentTool<any>[] = [];
+  if (toolNames.includes("delegate")) tools.push(makeSubAgentDelegateTool(streamFn, model, opts));
+  if (ragDatasetId && toolNames.includes("rag_search")) tools.push(makeRagSearchTool(ragDatasetId));
+  if (toolNames.includes("websearch")) tools.push(makeWebSearchTool());
+  if (toolNames.includes("python_data")) tools.push(makePythonDataTool());
   return new Agent({
     streamFn,
     transformContext: opts.transformContext,
@@ -286,11 +320,20 @@ export async function runPersonaAgent(
 
   // 상위 PI 에이전트 (부서장) — RAG 컨텍스트는 transformContext 훅으로 주입 (검색 결과 없으면 추가 안 함)
   const hasResults = ragChunks.length > 0;
-  const transformContext: AgentOptions["transformContext"] | undefined = hasResults
+  const uploadFiles = opts.uploadFiles ?? [];
+  const transformContext: AgentOptions["transformContext"] | undefined = hasResults || uploadFiles.length > 0
     ? async (messages) => {
+        const parts: string[] = [];
+        if (ragChunks.length) parts.push(`[업무 자료/검색 결과]\n${ragBlock}`);
+        if (uploadFiles.length) {
+          parts.push(
+            `[지정된 업로드 파일 — 엑셀/CSV 등 원본 바이너리, python_data 도구의 filePath 인자로 사용 가능]\n` +
+            uploadFiles.map((f) => `- ${f.filename} (경로: ${f.filePath})`).join("\n")
+          );
+        }
         const systemRag = {
           role: "user",
-          content: `[업무 자료/검색 결과]\n${ragBlock}`,
+          content: parts.join("\n\n"),
           timestamp: Date.now() - 2000,
         } as AgentMessage;
         return [systemRag, ...messages];

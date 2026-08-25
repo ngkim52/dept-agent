@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { requireUser, jsonError, HttpError } from "@/lib/auth/http";
 import { getPersona } from "@/lib/agent/personas";
 import { retrieveDepartmentChunks, runPersonaAgent } from "@/lib/agent/engine";
+import { readUpload, uploadPath } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
   // "@파일명" 지정 파일: 사용자 소유 문서의 본문을 RAG 컨텍스트로 주입 (개인 자료 우선, 요구 #3)
   const fileIds: string[] = Array.isArray(body.fileIds) ? body.fileIds.map(String).filter(Boolean) : [];
   const fileChunks: { content: string; source: string; similarity: number }[] = [];
+  const uploadFiles: { id: string; filename: string; filePath: string }[] = [];
   if (fileIds.length > 0) {
     try {
       const docs = await db.query.documents.findMany({
@@ -60,6 +62,11 @@ export async function POST(req: NextRequest) {
       for (const d of docs) {
         if (d.content && d.content.trim()) {
           fileChunks.push({ content: d.content.slice(0, 8000), source: `내 자료: ${d.filename}`, similarity: 1 });
+        }
+        // 원본 바이너리 경로도 전달 → python_data 툴이 엑셀/CSV를 직접 열어 처리
+        const fp = await readUpload(d.id);
+        if (fp) {
+          uploadFiles.push({ id: d.id, filename: d.filename, filePath: uploadPath(d.id) });
         }
       }
     } catch (e) {
@@ -92,7 +99,7 @@ export async function POST(req: NextRequest) {
             else if (ev.type === "tool_end") send("progress", { phase: "tool_done", toolName: ev.toolName, ok: ev.ok });
             else if (ev.type === "done") send("progress", { phase: "done" });
           },
-        }, { thinkingLevel });
+        }, { thinkingLevel, uploadFiles });
         const assistantMessageId = randomUUID();
         await db.insert(schema.messages).values({
           id: assistantMessageId,

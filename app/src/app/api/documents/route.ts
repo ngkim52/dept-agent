@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { requireUser, jsonError } from "@/lib/auth/http";
+import { saveUpload, saveUploadName } from "@/lib/uploads";
 
 const MAX_SIZE_MB = 20;
 
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest) {
       status: "done" as const,
       createdAt: new Date(),
     };
+    // 원본 바이너리도 보존 → "@파일명" 지정 시 파이썬(pandas/openpyxl)으로 엑셀 등 직접 처리
+    await saveUpload(doc.id, buf);
+    await saveUploadName(doc.id, file.name);
     await db.insert(schema.documents).values(doc);
     return Response.json({ document: { id: doc.id, filename: doc.filename, size: doc.size, mimeType: doc.mimeType, status: doc.status, createdAt: doc.createdAt } }, { status: 201 });
   } catch (e) { return jsonError(e); }

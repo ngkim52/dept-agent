@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetDb } from "./helpers";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
-import { toPiHistory, runPersonaAgent, makeWebSearchTool } from "@/lib/agent/engine";
+import { toPiHistory, runPersonaAgent, makeWebSearchTool, makePythonDataTool } from "@/lib/agent/engine";
+import { execPython } from "@/lib/agent/pyexec";
 import { webSearch, formatSearchResults } from "@/lib/agent/websearch";
 import { getPersona } from "@/lib/agent/personas";
 import type { Message as DbMessage } from "@/lib/db/schema";
@@ -102,5 +103,58 @@ describe("웹서치 툴", () => {
     expect(res.ok).toBe(false);
     expect(res.error).toContain("검색 API 키");
     (config as any).websearch = { serperApiKey: serper, tavilyApiKey: tavily };
+  });
+});
+
+describe("파이썬 데이터 처리 툴", () => {
+  it("execPython — CSV 데이터를 pandas로 집계", async () => {
+    const r = await execPython({
+      script: 'print(df.groupby("등급")["금액"].sum().to_string())',
+      inputData: "등급,건수,금액\nA,10,1000000\nB,20,2500000\nA,5,500000\n",
+    });
+    expect(r.ok).toBe(true);
+    expect(r.stdout).toContain("A");
+    expect(r.stdout).toContain("1500000");
+  });
+
+  it("execPython — 오류 스크립트는 stderr 반환", async () => {
+    const r = await execPython({ script: "raise ValueError('boom')" });
+    expect(r.ok).toBe(false);
+    expect(r.stderr).toContain("boom");
+  });
+
+  it("makePythonDataTool — name/label/parameters", () => {
+    const tool = makePythonDataTool();
+    expect(tool.name).toBe("python_data");
+    expect(tool.label).toContain("파이썬");
+    expect(tool.description).toContain("pandas");
+    expect(tool.parameters as any).toBeDefined();
+  });
+});
+
+describe("파이썬 업로드 파일 처리", () => {
+  it("execPython — xlsx 파일을 pandas로 처리 (openpyxl)", async () => {
+    // 임시 xlsx 파일 생성 (openpyxl 사용)
+    const py = "/home/ngkim52/.local/share/dept-agent-py/bin/python";
+    const { execFileSync } = await import("node:child_process");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const tmp = path.join(os.tmpdir(), `dept-py-xlsx-${Date.now()}.xlsx`);
+    execFileSync(py, ["-c", `
+import openpyxl
+wb = openpyxl.Workbook()
+ws = wb.active
+ws.append(["등급", "건수", "금액"])
+ws.append(["A", 10, 1000000])
+ws.append(["B", 20, 2500000])
+ws.append(["A", 5, 500000])
+wb.save(${JSON.stringify(tmp)})
+`]);
+    const r = await execPython({
+      script: 'print(df.to_string())\nprint("SUM_A=", df[df["등급"]=="A"]["금액"].sum())',
+      filePath: tmp,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.stdout).toContain("SUM_A= 1500000");
   });
 });
