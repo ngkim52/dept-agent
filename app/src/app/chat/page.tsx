@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type User = { id: string; email: string; name: string; role: string; departmentId: string };
@@ -571,48 +571,10 @@ export default function ChatPage() {
               </div>
             )}
 
-            {msgs.map(m => (
-              m.role === "user" ? (
-                <div key={m.id} className="rise flex justify-end">
-                  <div className="max-w-[75%] rounded-xl rounded-br-sm bg-ink px-4 py-2.5 text-sm leading-relaxed text-white">
-                    {m.content}
-                  </div>
-                </div>
-              ) : (
-                <div key={m.id} className="rise flex items-start gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-soft font-serif text-sm font-semibold text-accent">
-                    {persona.mono}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-baseline gap-2 px-1">
-                      <span className="text-xs font-semibold text-ink">{persona.name}</span>
-                      <span className="font-mono text-[11px] text-ink-faint">{fmtTime(m.createdAt)}</span>
-                    </div>
-                    <div className="rounded-xl rounded-tl-sm border border-line border-l-[3px] border-l-accent bg-surface px-4 py-3 text-sm text-ink">
-                      <Markdown text={m.content} />
-                      {m.citations && m.citations.length > 0 && (
-                        <div className="mt-3 border-t border-line pt-2.5">
-                          <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료 · {m.citations.length}</p>
-                          <ul className="mt-1.5 space-y-1">
-                            {m.citations.map((c, i) => (
-                              <li key={i} className="flex items-center gap-2 rounded-md bg-canvas px-2.5 py-1.5 text-xs text-ink-soft">
-                                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                                <span className="truncate">{c.source || "출처 알 수 없음"}</span>
-                                <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">{c.similarity ? `${Math.round(c.similarity * 100)}%` : ""}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )
-            ))}
-
-            {/* 요구 10: 진행 상황 패널 (완료 시 자동 접힘, 탭으로 펼침/접기) */}
-            {progress.length > 0 && (
-              <div className="rise mx-auto max-w-2xl overflow-hidden rounded-xl border border-line bg-surface">
+            {msgs.map((m, i) => (
+              <Fragment key={m.id}>
+                {i === msgs.length - 1 && progress.length > 0 && (
+                    <div className="rise mx-auto max-w-2xl overflow-hidden rounded-xl border border-line bg-surface">
                 <button onClick={() => setProgressOpen(o => !o)}
                   className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs font-medium text-ink-soft transition-colors hover:bg-canvas">
                   <span className={`text-ink-faint transition-transform ${progressOpen ? "" : "-rotate-90"}`}>
@@ -670,7 +632,45 @@ export default function ChatPage() {
                   </div>
                 )}
               </div>
-            )}
+                  )}
+                  {m.role === "user" ? (
+                <div key={m.id} className="rise flex justify-end">
+                  <div className="max-w-[75%] rounded-xl rounded-br-sm bg-ink px-4 py-2.5 text-sm leading-relaxed text-white">
+                    {m.content}
+                  </div>
+                </div>
+              ) : (
+                <div key={m.id} className="rise flex items-start gap-3">
+                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-soft font-serif text-sm font-semibold text-accent">
+                    {persona.mono}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-baseline gap-2 px-1">
+                      <span className="text-xs font-semibold text-ink">{persona.name}</span>
+                      <span className="font-mono text-[11px] text-ink-faint">{fmtTime(m.createdAt)}</span>
+                    </div>
+                    <div className="rounded-xl rounded-tl-sm border border-line border-l-[3px] border-l-accent bg-surface px-4 py-3 text-sm text-ink">
+                      <Markdown text={m.content} />
+                      {m.citations && m.citations.length > 0 && (
+                        <div className="mt-3 border-t border-line pt-2.5">
+                          <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료 · {m.citations.length}</p>
+                          <ul className="mt-1.5 space-y-1">
+                            {m.citations.map((c, i) => (
+                              <li key={i} className="flex items-center gap-2 rounded-md bg-canvas px-2.5 py-1.5 text-xs text-ink-soft">
+                                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                                <span className="truncate">{c.source || "출처 알 수 없음"}</span>
+                                <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">{c.similarity ? `${Math.round(c.similarity * 100)}%` : ""}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              </Fragment>
+            ))}
 
             {streamText && (
               <div className="rise flex items-start gap-3">
