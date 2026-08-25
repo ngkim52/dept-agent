@@ -111,6 +111,7 @@ export default function ChatPage() {
   const [progress, setProgress] = useState<Progress[]>([]);
   const [progressOpen, setProgressOpen] = useState(true);
   const [expandedIdx, setExpandedIdx] = useState(-1);
+  const [thinkingLevel, setThinkingLevel] = useState<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max">("high");
   const [slashOpen, setSlashOpen] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [slashItems, setSlashItems] = useState<{ name: string; description: string }[]>([]);
@@ -210,7 +211,6 @@ export default function ChatPage() {
 
   async function send(textOverride?: string) {
     let text = (textOverride ?? input).trim();
-    let thinkingOpt: string | undefined; // "/생각 <레벨>" 로 지정한 추론 수준
     if (!text || streaming) return;
     // "/스킬명 옵션값" → 스킬명을 명령으로 인식하고 나머지를 실제 질문으로 사용
     const slashMatch = text.match(/^\/([\p{L}\p{N}_-]+)\s*([\s\S]*)$/u);
@@ -224,12 +224,21 @@ export default function ChatPage() {
       } else if (cmd === "자료") { router.push("/documents"); return; }
       else if (cmd === "새대화") { await newConversation(); return; }
       else if (cmd === "생각") {
-        // "/생각 high" 같은 옵션 값 → 추론 수준 설정 메시지로 변환
-        const level = rest.toLowerCase();
-        const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-        if (rest && levels.includes(level)) {
-          thinkingOpt = level;
-          text = `추론 수준(thinking)을 ${level}로 설정해 주세요.`;
+        // "/생각 <레벨>" → 추론 수준 변경(쿼리 전송 없음). 레벨 뒤에 질문이 붙으면 그 질문만 전송한다.
+        const m2 = rest.match(/^(off|minimal|low|medium|high|xhigh|max)(?:\s+([\s\S]*))?$/i);
+        if (m2) {
+          setThinkingLevel(m2[1].toLowerCase() as typeof thinkingLevel);
+          const q = (m2[2] ?? "").trim();
+          if (q) {
+            text = q; // 레벨 변경 + 질문 동시 전송
+          } else {
+            // 순수 설정 명령: 쿼리로 보내지 않고 안내만 표시한다.
+            const announceId = `sys-${Date.now()}`;
+            setMsgs(prev => [...prev, { id: announceId, role: "assistant", createdAt: new Date().toISOString(), content: `추론 수준을 ${m2[1].toLowerCase()}로 변경했습니다. 이제부터 이 수준으로 생각합니다.` }]);
+            setInput(""); setStreaming(false); setError("");
+            requestAnimationFrame(() => { inputRef.current?.focus(); resizeInput(); });
+            return;
+          }
         } else {
           text = rest ? `생각 수준을 ${rest}으로 설정해 주세요.` : "생각 수준을 안내해 주세요. (off/minimal/low/medium/high)";
         }
@@ -255,7 +264,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: convId, message: text, fileIds, ...(thinkingOpt ? { thinkingLevel: thinkingOpt } : {}) }),
+        body: JSON.stringify({ conversationId: convId, message: text, fileIds, thinkingLevel }),
       });
       // 전송 시 지정한 파일 참조는 일회성으로 사용 (컨텍스트 중복 방지)
       setFileIds([]);
@@ -290,7 +299,15 @@ export default function ChatPage() {
               : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "", ok: data.ok ?? true }
               : data.phase === "done" ? { phase: "done" }
               : { phase: "thinking", detail: data.detail ?? "생각하는 중입니다" };
-            setProgress(prev => [...prev.filter(x => !(x.phase === "thinking" && p.phase === "tool")), p]);
+            
+            setProgress(prev => {
+              // thinking 은 최신 상태로 제자리 갱신(중복 방지), 도구/완료 항목은 append
+              if (p.phase === "thinking") {
+                const idx = prev.map(x => x.phase).lastIndexOf("thinking");
+                if (idx >= 0) { const copy = [...prev]; copy[idx] = p; return copy; }
+              }
+              return [...prev, p];
+            });
           } else if (eventName === "done") {
             finalText = data.content ?? finalText;
             setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
@@ -341,12 +358,12 @@ export default function ChatPage() {
     if (name === "/새대화") { void newConversation(); return; }
     // "/생각" 은 옵션 값(off/minimal/low/medium/high)을 뒤에 붙이도록 안내 + "/생각 " 삽입
     if (name === "/생각") {
-      setInput("/생각 high");
+      const curLevel = thinkingLevel; // 현재 수준을 기본값으로 삽입
+      setInput(`/생각 ${curLevel}`);
       setSlashOpen(false);
       requestAnimationFrame(() => {
-        // "high" 부분을 드래그 선택해 사용자가 다른 수준으로 바꿀 수 있게
         const el = inputRef.current;
-        if (el) { el.focus(); el.setSelectionRange("/생각 ".length, "/생각 high".length); resizeInput(); }
+        if (el) { el.focus(); el.setSelectionRange(`/생각 `.length, `/생각 ${curLevel}`.length); resizeInput(); }
       });
       return;
     }
@@ -543,6 +560,9 @@ export default function ChatPage() {
           </span>
           <span className="flex items-center gap-1.5 rounded-md bg-accent-soft px-2 py-1 font-mono text-[11px] text-accent">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" /> 업무 스킬 · 자동 압축
+          </span>
+          <span className="flex items-center gap-1.5 rounded-md bg-canvas px-2 py-1 font-mono text-[11px] text-ink-soft">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" /> 생각 · {thinkingLevel}
           </span>
         </header>
 
