@@ -13,6 +13,10 @@ export const config = {
     apiKey: process.env.LLM_API_KEY ?? "",
     model: process.env.LLM_MODEL ?? "deepseek-v4-flash",
   },
+  websearch: {
+    serperApiKey: process.env.SERPER_API_KEY ?? "",
+    tavilyApiKey: process.env.TAVILY_API_KEY ?? "",
+  },
   rag: {
     topK: Number(process.env.RAG_TOP_K ?? "5"),
     similarityThreshold: Number(process.env.RAG_SIMILARITY_THRESHOLD ?? "0.2"),

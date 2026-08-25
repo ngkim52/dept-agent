@@ -14,9 +14,10 @@ export async function GET(req: NextRequest) {
     return Response.json({
       skills: skills.map((s) => ({ name: s.name, description: s.description })),
       features: [
+        { name: "/웹검색", description: "웹에서 최신 정보 검색 (옵션: 검색할 내용)" },
         { name: "/자료", description: "내 자료 관리 화면 열기" },
         { name: "/새대화", description: "새 대화 시작" },
-        { name: "/생각", description: "추론 수준 변경 (off/low/high)" },
+        { name: "/생각", description: "추론 수준 변경 (off/minimal/low/medium/high)" },
       ],
     });
   } catch (e) { return jsonError(e); }

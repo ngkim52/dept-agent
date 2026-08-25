@@ -1,4 +1,5 @@
 import { ragflow } from "@/lib/ragflow/client";
+import { webSearch, formatSearchResults } from "@/lib/agent/websearch";
 import { requireRagConfig, config } from "@/lib/config";
 import { getLlmModel } from "@/lib/agent/llm";
 import { getPersona, type Persona } from "@/lib/agent/personas";
@@ -153,11 +154,30 @@ export function makeRagSearchTool(datasetId: string): AgentTool<any, { query: st
   };
 }
 
-/** 상위 PI 에이전트 생성 — 페르소나 + 서브에이전트 위임 + RAG 검색 툴 + hooks + 스킬 */
+/** 웹 검색 툴 — 보험·규제·시장 정보 등 최신 외부 정보가 필요할 때 웹에서 검색 (Serper/Tavily) */
+export function makeWebSearchTool(): AgentTool<any, { query: string }> {
+  return {
+    name: "websearch",
+    label: "웹 검색",
+    description:
+      "인터넷에서 최신 정보를 검색합니다. 보험 규제 변경, 시장 동향, 금융감독원/국민연금 등 외부 최신 소식이 필요할 때 사용하세요. 부서 자료(RAG)에서 답을 찾지 못했을 때 활용합니다.",
+    parameters: Type.Object({ query: Type.String({ description: "검색할 질문/키워드" }) }),
+    async execute(toolCallId: string, params: any, _signal?: AbortSignal) {
+      const q = String(params?.query ?? "").trim();
+      const res = await webSearch(q || "대한민국 보험 규제 동향");
+      const text = formatSearchResults(q, res);
+      return { content: [{ type: "text", text }], details: { query: q, provider: res.provider, count: res.results.length } } as AgentToolResult<{ query: string }>;
+    },
+  };
+}
+
+/** 상위 PI 에이전트 생성 — 페르소나 + 서브에이전트 위임 + RAG 검색 툴 + 웹 검색 + hooks + 스킬 */
 export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, history: PiMessage[] = [], opts: AgentOptions = {}, ragDatasetId?: string) {
   const systemPrompt = buildPersonaSystemPromptWithSkills(persona.systemPrompt, getPersonaSkills(persona.key));
   const tools: AgentTool<any>[] = [makeSubAgentDelegateTool(streamFn, model, opts)];
   if (ragDatasetId) tools.push(makeRagSearchTool(ragDatasetId));
+  // 웹 검색: 외부 최신 정보 조회 (Serper/Tavily 키 설정 여부와 무관하게 도구 노출, 키 없으면 안내 반환)
+  tools.push(makeWebSearchTool());
   return new Agent({
     streamFn,
     transformContext: opts.transformContext,

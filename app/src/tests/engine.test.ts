@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetDb } from "./helpers";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
-import { toPiHistory, runPersonaAgent } from "@/lib/agent/engine";
+import { toPiHistory, runPersonaAgent, makeWebSearchTool } from "@/lib/agent/engine";
+import { webSearch, formatSearchResults } from "@/lib/agent/websearch";
 import { getPersona } from "@/lib/agent/personas";
 import type { Message as DbMessage } from "@/lib/db/schema";
 
@@ -72,5 +73,34 @@ describe("runPersonaAgent", () => {
     // 현재 질문은 정확히 1번
     const q = userContents.filter((u) => u.includes("[질문/업무 내용]\n지금 질문입니다"));
     expect(q).toHaveLength(1);
+  });
+});
+
+describe("웹서치 툴", () => {
+  it("툴 정의 — name/label/parameters", () => {
+    const tool = makeWebSearchTool();
+    expect(tool.name).toBe("websearch");
+    expect(tool.label).toBe("웹 검색");
+    expect(tool.description).toContain("검색");
+    expect(tool.parameters as any).toBeDefined();
+  });
+
+  it("formatSearchResults — 결과 텍스트 변환/빈 결과", () => {
+    expect(formatSearchResults("q", { ok: true, provider: "serper", results: [
+      { title: "금융위", url: "https://fsc.go.kr", snippet: "보험업 감독규정 개정" },
+    ] })).toContain("[웹 1] 금융위");
+    expect(formatSearchResults("q", { ok: false, provider: "none", results: [] })).toBe("(웹 검색 불가)");
+    expect(formatSearchResults("q", { ok: true, provider: "serper", results: [] })).toBe("(검색 결과 없음)");
+  });
+
+  it("webSearch — 키 없으면 ok:false + 안내", async () => {
+    const { config } = await import("@/lib/config");
+    const serper = config.websearch.serperApiKey;
+    const tavily = config.websearch.tavilyApiKey;
+    (config as any).websearch = { serperApiKey: "", tavilyApiKey: "" };
+    const res = await webSearch("테스트");
+    expect(res.ok).toBe(false);
+    expect(res.error).toContain("검색 API 키");
+    (config as any).websearch = { serperApiKey: serper, tavilyApiKey: tavily };
   });
 });

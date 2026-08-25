@@ -216,12 +216,13 @@ export default function ChatPage() {
       const cmd = slashMatch[1];
       const rest = slashMatch[2].trim();
       const isSkill = slashItems.some(s => s.name.replace(/^\//, "") === cmd);
-      const isFeature = ["자료", "새대화", "생각"].includes(cmd);
+      const isFeature = ["웹검색", "자료", "새대화", "생각"].includes(cmd);
       if (isSkill) {
         text = rest || `/${cmd} 절차를 검토해 주세요.`;
       } else if (cmd === "자료") { router.push("/documents"); return; }
       else if (cmd === "새대화") { await newConversation(); return; }
       else if (cmd === "생각") { text = rest || "생각 수준을 안내해 주세요."; }
+      else if (cmd === "웹검색") { text = rest || "최신 웹 정보를 검색해 주세요."; }
       else if (isFeature) { /* 알려진 기능이면 그대로 전송 */ }
       // 그 외 미지의 "/..." 는 일반 질문으로 전송
     }
