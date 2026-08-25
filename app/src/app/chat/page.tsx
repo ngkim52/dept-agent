@@ -43,9 +43,54 @@ function Markdown({ text }: { text: string }) {
       list = null;
     }
   };
-  for (const raw of lines) {
+  const renderTable = (rows: string[][], align: boolean[]) => {
+    out.push(
+      <div key={key++} className="my-2 overflow-x-auto rounded-lg border border-line">
+        <table className="w-full border-collapse text-xs">
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri} className={ri === 0 ? "bg-canvas" : "border-t border-line"}>
+                {row.map((cell, ci) => (
+                  <td key={ci} className="px-3 py-1.5 align-top text-ink" dangerouslySetInnerHTML={{ __html: inline(cell) }} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+  for (let idx = 0; idx < lines.length; idx++) {
+    const raw = lines[idx];
     const t = raw.trim();
     if (!t) { flush(); continue; }
+    // 테이블: "|" 라인 + 다음 라인에 구분자(|---|) 가 있으면 하나의 표로 수집
+    if (t.startsWith("|")) {
+      const rows: string[][] = []; let align: boolean[] = []; let consumed = 0;
+      const parseRow = (s: string) => {
+        const cells = s.split("|").slice(1, -1).map(c => c.trim());
+        align = cells.map(() => true);
+        return cells;
+      };
+      const isSep = (s: string) => s.startsWith("|") && /^\|?[\s:\-|]+\|?$/.test(s) && s.includes("-");
+      let r0 = parseRow(t);
+      let sepIdx = idx + 1;
+      if (sepIdx < lines.length && isSep(lines[sepIdx].trim())) {
+        rows.push(r0); // header
+        consumed = 1;
+        let r = sepIdx + 1;
+        while (r < lines.length && lines[r].trim().startsWith("|")) {
+          rows.push(parseRow(lines[r].trim()));
+          consumed++;
+          r++;
+        }
+        idx += consumed + 1;
+        flush();
+        renderTable(rows, align);
+        idx--; // for 루프가 다시 +1
+        continue;
+      }
+    }
     const h = t.match(/^(#{1,6})\s+(.*)$/);
     if (h) {
       flush();
@@ -65,6 +110,7 @@ function Markdown({ text }: { text: string }) {
   flush();
   return <div className="space-y-2">{out}</div>;
 }
+
 
 function fmtTime(iso: string) {
   const d = new Date(iso);
@@ -217,8 +263,9 @@ export default function ChatPage() {
     if (slashMatch) {
       const cmd = slashMatch[1];
       const rest = slashMatch[2].trim();
-      const isSkill = slashItems.some(s => s.name.replace(/^\//, "") === cmd);
       const isFeature = ["웹검색", "자료", "새대화", "생각"].includes(cmd);
+      // features(기능 명령)는 스킬로 취급하지 않는다 → /생각 등이 쿼리로 오인되지 않게
+      const isSkill = !isFeature && slashItems.some(s => s.name.replace(/^\//, "") === cmd);
       if (isSkill) {
         text = rest || `/${cmd} 절차를 검토해 주세요.`;
       } else if (cmd === "자료") { router.push("/documents"); return; }
@@ -609,11 +656,12 @@ export default function ChatPage() {
                 {progressOpen && (
                   <div className="space-y-1.5 border-t border-line px-4 py-3">
                     {progress.map((p, i) => {
-                      const label = p.phase === "thinking" ? (p.detail ?? "생각하는 중입니다")
+                      const label = p.phase === "thinking" ? ((p.detail ?? "생각하는 중입니다").slice(0, 60) + ((p.detail?.length ?? 0) > 60 ? "…" : ""))
                         : p.phase === "tool" ? (p.detail ?? `도구 실행: ${p.toolName}`)
                         : p.phase === "tool_done" ? `도구 완료: ${p.toolName}${p.ok === false ? " (실패)" : ""}`
                         : "응답 완료";
-                      const hasDetail = p.args !== undefined && p.args !== null;
+                      const hasDetail = p.phase === "thinking" ? (p.detail != null && p.detail.length > 0)
+                        : (p.args !== undefined && p.args !== null);
                       const isOpen = expandedIdx === i;
                       return (
                         <div key={i} className="flex flex-col gap-1">
@@ -643,7 +691,7 @@ export default function ChatPage() {
                           </div>
                           {hasDetail && isOpen && (
                             <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-soft">
-                              {typeof p.args === "string" ? p.args : JSON.stringify(p.args, null, 2)}
+                              {p.phase === "thinking" ? p.detail : (typeof p.args === "string" ? p.args : JSON.stringify(p.args, null, 2))}
                             </pre>
                           )}
                         </div>

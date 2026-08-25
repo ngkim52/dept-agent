@@ -342,18 +342,29 @@ export async function runPersonaAgent(
   const agent = buildPiAgent(persona, streamFn, model, historyForAgent, { ...opts, transformContext });
 
   let text = "";
+  let thinkingBuf = "";
+  let thinkingStarted = false;
   const unsubscribe = agent.subscribe((ev) => {
     if (ev.type === "message_update" && ev.assistantMessageEvent?.type === "text_delta") {
       const delta = ev.assistantMessageEvent.delta;
       text += delta;
       cb.onTextDelta(delta);
     }
+    // 실제 추론(reasoning) 텍스트 수집 → 진행 패널에 노출
+    if (ev.type === "message_update" && ev.assistantMessageEvent?.type) {
+      const am = ev.assistantMessageEvent as any;
+      if (am.type === "thinking_start") { thinkingBuf = ""; thinkingStarted = true; }
+      else if (am.type === "thinking_delta") {
+        thinkingBuf = (thinkingBuf + (am.delta ?? "")).slice(-4000);
+        if (cb.onProgress) cb.onProgress({ type: "thinking", detail: thinkingBuf.trim() || "생각하는 중입니다" });
+      }
+    }
     const et = ev.type as string;
     if (cb.onProgress && (et === "tool_execution_start" || et === "tool_execution_end" || et === "agent_start" || et === "turn_start" || et === "agent_end")) {
       cb.onProgress(
         et === "tool_execution_start" ? { type: "tool_start", toolName: (ev as any).toolName, args: (ev as any).args }
         : et === "tool_execution_end" ? { type: "tool_end", toolName: (ev as any).toolName, ok: !(ev as any).isError }
-        : et === "agent_start" || et === "turn_start" ? { type: "thinking", detail: et === "turn_start" ? "부서장이 업무를 검토하고 있습니다" : undefined }
+        : et === "agent_start" || et === "turn_start" ? { type: "thinking", detail: thinkingBuf.trim() || "부서장이 업무를 검토하고 있습니다" }
         : { type: "done" }
       );
     }
