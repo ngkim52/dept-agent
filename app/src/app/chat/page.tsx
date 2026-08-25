@@ -510,22 +510,24 @@ export default function ChatPage() {
       {/* ── 사이드바 ── */}
       {sidebarOpen && (
       <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-surface">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <div className="flex items-center gap-2.5">
+        <div className="border-b border-line px-5 py-4">
+          <div className="flex items-center justify-between gap-2">
             <img src="/shinhan-life-logo.png" alt="신한라이프" className="h-6 w-auto object-contain" />
+            <button onClick={() => setSidebarOpen(false)} title="사이드바 접기"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
+            </button>
+          </div>
+          <div className="mt-3 flex items-center justify-between">
             <div>
               <p className="font-serif text-lg font-semibold leading-tight">부서장</p>
               <p className="text-xs text-ink-soft">페르소나 에이전트</p>
             </div>
+            <button onClick={logout} title="로그아웃"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+              {I.logout}
+            </button>
           </div>
-          <button onClick={() => setSidebarOpen(false)} title="사이드바 접기"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
-            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
-          </button>
-          <button onClick={logout} title="로그아웃"
-            className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
-            {I.logout}
-          </button>
         </div>
 
         {/* 페르소나 칩 */}
