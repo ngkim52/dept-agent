@@ -153,7 +153,7 @@ export default function ChatPage() {
   const [pendingCitations, setPendingCitations] = useState<Citation[]>([]);
   const [activeDepartmentId, setActiveDepartmentId] = useState<string>("claims-planning");
   const [activeConvDeptId, setActiveConvDeptId] = useState<string>("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [progress, setProgress] = useState<Progress[]>([]);
   const [progressOpen, setProgressOpen] = useState(true);
   const [expandedIdx, setExpandedIdx] = useState(-1);
@@ -498,24 +498,24 @@ export default function ChatPage() {
       )}
 
       {!sidebarOpen && (
-      <aside className="flex w-14 shrink-0 flex-col items-center justify-between border-r border-line bg-surface py-4">
+      <aside className="flex w-20 shrink-0 flex-col items-center border-r border-line bg-surface py-5">
         {/* 상단 — 신한라이프 마크 */}
         <button onClick={() => setSidebarOpen(true)} title="신한라이프"
-          className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-canvas">
-          <img src="/shinhan-life-mark.png" alt="신한라이프" className="h-8 w-8 object-contain" />
+          className="flex h-14 w-14 items-center justify-center rounded-lg transition-colors hover:bg-canvas">
+          <img src="/shinhan-life-mark.png" alt="신한라이프" className="h-12 w-12 object-contain" />
         </button>
-        {/* 하단 — 빠른 아이콘 */}
-        <div className="flex flex-col items-center gap-1.5">
+        {/* 로고 바로 아래 — 빠른 아이콘 */}
+        <div className="mt-7 flex flex-col items-center gap-1.5">
           <button onClick={() => setSidebarOpen(true)} title="사이드바 열기"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
+            className="flex h-10 w-10 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
           </button>
           <button onClick={newConversation} title="새 대화"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
+            className="flex h-10 w-10 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
             {I.plus}
           </button>
           <button onClick={() => router.push("/documents")} title="자료 관리"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
+            className="flex h-10 w-10 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
             {I.folder}
           </button>
         </div>
