@@ -35,17 +35,15 @@ export async function POST(req: NextRequest) {
     const existing = await db.query.users.findFirst({ where: eq(schema.users.email, email) });
     if (existing) return Response.json({ error: "이미 가입된 이메일입니다." }, { status: 409 });
 
-    // 최초 가입자는 자동 관리자(성숙 시 '시드 계정' 배포로 전환 가능)
-    const userCount = await db.$count(schema.users);
-    const isFirst = userCount === 0;
+    // 보안: 모든 가입자는 pending(user). 관리자는 seed 스크립트(ADMIN_EMAIL)로만 생성.
     const now = new Date();
     const user = {
       id: randomUUID(),
       email,
       name,
       passwordHash: await hashPassword(password),
-      role: (isFirst ? "admin" : "user") as "admin" | "user",
-      status: isFirst ? "active" as const : "pending" as const,
+      role: "user" as const,
+      status: "pending" as const,
       departmentId,
       createdAt: now,
     };

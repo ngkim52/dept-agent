@@ -65,13 +65,13 @@ describe("auth/register", () => {
     expect(res.status).toBe(400);
   });
 
-  it("첫 가입자는 자동 admin+active", async () => {
+  it("가입자는 항상 pending(user) — 관리자는 seed로만 생성", async () => {
     const { POST } = await import("@/app/api/auth/register/route");
     const res = await callPost(POST, { email: "first@shinhan.com", name: "첫사람", password: "secret123", departmentId: "claims-planning" });
     expect(res.status).toBe(201);
     const data = await res.json();
-    expect(data.user.role).toBe("admin");
-    expect(data.user.status).toBe("active");
+    expect(data.user.role).toBe("user");
+    expect(data.user.status).toBe("pending");
   });
 
   it("두 번째 가입자는 pending(user)", async () => {
@@ -95,8 +95,15 @@ describe("auth/login+me", () => {
   beforeEach(async () => { await resetDb(); await withDept(); });
 
   async function makeActiveUser() {
-    const { POST } = await import("@/app/api/auth/register/route");
-    await callPost(POST, { email: "first@shinhan.com", name: "첫사람", password: "secret123", departmentId: "claims-planning" });
+    // 보안 개선: 관리자는 seed로만 생성. 테스트에서는 withUser로 직접 admin+active 삽입
+    const { withUser, withDept } = await import("./helpers");
+    await withDept();
+    const u = await withUser({ email: "first@shinhan.com", name: "첫사람", role: "admin", status: "active" });
+    // 비밀번호 해시를 "secret123"으로 업데이트 (login 테스트용)
+    const { hashPassword } = await import("@/lib/auth/password");
+    const { db, schema } = await import("@/lib/db");
+    const { eq } = await import("drizzle-orm");
+    await db.update(schema.users).set({ passwordHash: await hashPassword("secret123") }).where(eq(schema.users.id, u.id));
   }
 
   it("올바른 비밀번호 → 세션 쿠키 발급, me 조회 가능", async () => {
