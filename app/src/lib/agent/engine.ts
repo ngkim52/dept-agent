@@ -116,10 +116,18 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
       if (!subPersona) throw new Error(`알 수 없는 부서: ${params.department}`);
       const subPersonaPrompt = buildPersonaSystemPromptWithSkills(subPersona.systemPrompt, getPersonaSkills((params as SubAgentParams).department));
       // 서브에이전트는 전용 모델("simple") 사용 — UI 설정 가능, 실패 시 메인 모델 fallback
+      // 단, simple 모델이 메인 모델과 같은 provider/gateway여야 streamFn 호환. 다를 경우 메인 모델로 fallback (P2-E3)
       let subModel = model;
       try {
         const sl = await getLlmModel("simple");
-        subModel = sl.model;
+        // provider/gateway가 메인과 같을 때만 simple 모델 사용
+        const mainProvider = (model as any)?.provider ?? (model as any)?.modelId ?? "";
+        const subProvider = (sl.model as any)?.provider ?? (sl.model as any)?.modelId ?? "";
+        if (mainProvider && subProvider && mainProvider !== subProvider) {
+          console.warn(`[delegate] simple 모델 provider(${subProvider}) ≠ 메인(${mainProvider}) → 메인 모델 사용`);
+        } else {
+          subModel = sl.model;
+        }
       } catch { /* simple 전용 모델 미설정 시 메인 모델 사용 */ }
       const sub = new Agent({
         streamFn,
