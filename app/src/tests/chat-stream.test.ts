@@ -124,4 +124,23 @@ describe("POST /api/chat/stream", () => {
     expect(roles).toEqual(["assistant", "user"]);
     expect(saved.find((m) => m.role === "assistant")?.content).toBe("부서장 답변입니다");
   });
+
+  it("RAGFlow 다운 시에도 SSE를 500이 아닌 200으로 응답하고 assistant 응답 생성", async () => {
+    mocks.retrieveFn.mockRejectedValue(new Error("rag down"));
+    const u = await withUser({});
+    const { token } = await createSession(u.id);
+    const convId = randomUUID();
+    await db.insert(schema.conversations).values({ id: convId, userId: u.id, departmentId: u.departmentId, title: "새 대화", createdAt: new Date() });
+    const { POST } = await import("@/app/api/chat/stream/route");
+    const res = await POST(new NextRequest("http://localhost/api/chat/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `dept_session=${token}` },
+      body: JSON.stringify({ conversationId: convId, message: "7월 손해율 추이" }),
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("event: text_delta");
+    expect(body).toContain("event: done");
+    expect(body).toContain("부서장");
+  });
 });

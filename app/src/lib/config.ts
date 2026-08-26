@@ -3,6 +3,8 @@ export const config = {
   allowedEmailDomains: (process.env.ALLOWED_EMAIL_DOMAINS ?? "shinhan.com,shinhanlife.co.kr")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
   sessionCookieName: process.env.SESSION_COOKIE_NAME ?? "dept_session",
+  // 보안 우선: 기본 Secure(호출 시점 평가). 로컬 http 개발 시에만 COOKIE_SECURE=false 로 끈다.
+  get cookieSecure(): boolean { return process.env.COOKIE_SECURE !== "false"; },
   sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? "604800000"), // 7일 (환경변수)
   ragflow: {
     baseUrl: process.env.RAGFLOW_BASE_URL ?? "",

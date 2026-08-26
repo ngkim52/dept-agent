@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     }
     const { token, expiresAt } = await createSession(user.id);
     const res = Response.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, departmentId: user.departmentId } });
-    res.headers.set("Set-Cookie", `${config.sessionCookieName}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor((expiresAt.getTime() - Date.now()) / 1000)}${process.env.COOKIE_SECURE === "true" ? "; Secure" : ""}`);
+    res.headers.set("Set-Cookie", `${config.sessionCookieName}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor((expiresAt.getTime() - Date.now()) / 1000)}${config.cookieSecure ? "; Secure" : ""}`);
     return res;
   } catch (e) { return jsonError(e); }
 }

@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { requireUser, jsonError, HttpError } from "@/lib/auth/http";
 import { getPersona } from "@/lib/agent/personas";
 import { retrieveDepartmentChunks, runPersonaAgent } from "@/lib/agent/engine";
+import type { RagHint } from "@/lib/agent/engine";
 import { readUpload, uploadPath } from "@/lib/uploads";
 import { getDepartmentDatasets, getDepartmentDatasetInfos } from "@/lib/dataset/access";
 
@@ -76,9 +77,26 @@ export async function POST(req: NextRequest) {
   }
 
   // RAGFlow 검색 (부서 데이터셋만) + 지정 파일 본문
-  const deptDatasetIds = await getDepartmentDatasets(conversation.departmentId ?? "");
-  const deptDatasetInfos = await getDepartmentDatasetInfos(conversation.departmentId ?? "");
-  const ragChunks = await retrieveDepartmentChunks(message, deptDatasetIds);
+  // RAGFlow 다운/미설정 시에도 SSE를 유지하고 폴백하도록 try/catch (리뷰-E1)
+  let deptDatasetIds: string[] = [];
+  let deptDatasetInfos: { id: string; name: string }[] = [];
+  let ragChunks: { content: string; source: string; similarity: number }[] = [];
+  let ragFailed = false;
+  try {
+    deptDatasetIds = await getDepartmentDatasets(conversation.departmentId ?? "");
+    deptDatasetInfos = await getDepartmentDatasetInfos(conversation.departmentId ?? "");
+  } catch (e) {
+    ragFailed = true;
+    console.error("RAG dataset 해석 실패:", e);
+  }
+  if (!ragFailed) {
+    try {
+      ragChunks = await retrieveDepartmentChunks(message, deptDatasetIds);
+    } catch (e) {
+      ragFailed = true;
+      console.error("RAG 검색 실패(다운/타임아웃):", e);
+    }
+  }
   const chunks = [...fileChunks, ...ragChunks];
 
   const stream = new ReadableStream<Uint8Array>({
@@ -87,7 +105,9 @@ export async function POST(req: NextRequest) {
       let assistantText = "";
       try {
         // RAG 사전 조회 결과를 진행 단계로 노출 (자동 조회도 어떤 작업인지 보이도록)
-        if (deptDatasetIds.length > 0) {
+        if (ragFailed) {
+          send("progress", { phase: "tool_done", toolName: "RAG 자료 검색", ok: false, args: { error: "부서 자료 검색에 실패했습니다. 답변은 품질이 낮을 수 있습니다." } });
+        } else if (deptDatasetIds.length > 0) {
           send("progress", { phase: "tool", toolName: "RAG 자료 검색", args: { datasets: deptDatasetInfos, count: ragChunks.length } });
           send("progress", { phase: "tool_done", toolName: "RAG 자료 검색", ok: true, args: { datasets: deptDatasetInfos, count: ragChunks.length } });
         }

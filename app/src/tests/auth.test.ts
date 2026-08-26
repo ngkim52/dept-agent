@@ -128,4 +128,28 @@ describe("auth/login+me", () => {
     const res = await callPost(login, { email: "b@shinhan.com", password: "secret123" });
     expect(res.status).toBe(403);
   });
+
+  it("보안 우선: COOKIE_SECURE 미설정이면 세션 쿠키에 Secure 포함 (+ HttpOnly/SameSite)", async () => {
+    const prev = process.env.COOKIE_SECURE;
+    delete process.env.COOKIE_SECURE;
+    await makeActiveUser();
+    const { POST: login } = await import("@/app/api/auth/login/route");
+    const res = await callPost(login, { email: "first@shinhan.com", password: "secret123" });
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite");
+    expect(setCookie).toContain("Secure");
+    if (prev !== undefined) process.env.COOKIE_SECURE = prev; else process.env.COOKIE_SECURE = "false";
+  });
+
+  it("COOKIE_SECURE=false(로컬 http)면 Secure 미포함", async () => {
+    const prev = process.env.COOKIE_SECURE;
+    process.env.COOKIE_SECURE = "false";
+    await makeActiveUser();
+    const { POST: login } = await import("@/app/api/auth/login/route");
+    const res = await callPost(login, { email: "first@shinhan.com", password: "secret123" });
+    const setCookie = res.headers.get("set-cookie") ?? "";
+    expect(setCookie).not.toContain("Secure");
+    if (prev !== undefined) process.env.COOKIE_SECURE = prev; else process.env.COOKIE_SECURE = "false";
+  });
 });
