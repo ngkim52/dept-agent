@@ -101,7 +101,10 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
   const name = "delegate";
   const label = "부서 서브에이전트 위임";
   const description =
-    "전문 부서(보험금심사기획/계리)의 서브에이전트에게 질문을 위임합니다. 계리·요율·준비금은 actuarial, 보험금 심사 절차·규정은 claims-planning을 선택하세요.";
+    "전문 부서 서브에이전트에게 질문을 위임합니다.\n" +
+    "- claims-planning(보험금기획팀): 지급보험금 건전성·손해율 모니터링, 보험금 품질·적정성 점검, 업무자동화·효율화, 고객편의성, 신상품 보험금 리스크, 심사 규정·절차를 담당합니다.\n" +
+    "- actuarial(계리팀): 보험수리·요율 산출·준비금·재무건전성 계산, 통계적 보험금 예측 등 수리적 계산이 필요할 때만 선택합니다.\n" +
+    "주의: 지급보험금·손해율·보험금 업무 질문은 claims-planning의 담당이므로 actuarial로 오위임하지 마세요. 위임할 때는 사용자 질문을 그대로 전달하고, 의역 또는 관점 재구성을 덧붙이지 마세요.";
   const parameters = Type.Object({
     department: Type.Union([Type.Literal("claims-planning"), Type.Literal("actuarial")]),
     question: Type.String(),

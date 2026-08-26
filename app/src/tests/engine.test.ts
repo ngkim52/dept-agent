@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { resetDb } from "./helpers";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
-import { toPiHistory, runPersonaAgent, makeWebSearchTool, makePythonDataTool } from "@/lib/agent/engine";
+import { toPiHistory, runPersonaAgent, makeWebSearchTool, makePythonDataTool, makeSubAgentDelegateTool } from "@/lib/agent/engine";
 import { execPython } from "@/lib/agent/pyexec";
 import { webSearch, formatSearchResults } from "@/lib/agent/websearch";
 import { getPersona } from "@/lib/agent/personas";
@@ -180,5 +180,17 @@ describe("python_data 툴 보안(업로드 경로 신뢰 경계)", () => {
     const tool = makePythonDataTool();
     const r = await tool.execute("t3", { script: "print('ok')", data: "a,b\n1,2" }, undefined);
     expect(r.details).toBeDefined();
+  });
+});
+
+
+describe("delegate 서브에이전트 위임 — 부서 매핑", () => {
+  it("claims-planning이 지급보험금·손해율 영역을 담당함을 description에 명시 (오위임 방지)", () => {
+    const tool = makeSubAgentDelegateTool({} as any, {} as any);
+    const desc = tool.description;
+    expect(desc).toContain("claims-planning(보험금기획팀)");
+    expect(desc).toContain("지급보험금 건전성·손해율 모니터링");
+    expect(desc).toContain("보험수리·요율 산출·준비금"); // actuarial 전용 영역
+    expect(desc).toContain("actuarial로 오위임하지 마세요");
   });
 });
