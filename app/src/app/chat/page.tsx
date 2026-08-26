@@ -269,13 +269,14 @@ export default function ChatPage() {
   async function send(textOverride?: string) {
     let text = (textOverride ?? input).trim();
     if (!text || streaming) return;
-    // "/스킬명 옵션값" → 스킬명을 명령으로 인식하고 나머지를 실제 질문으로 사용
-    const slashMatch = text.match(/^\/([\p{L}\p{N}_-]+)\s*([\s\S]*)$/u);
+    // "/스킬명 옵션값" → 스킬명(공백 포함)을 명령으로 인식하고 나머지를 실제 질문으로 사용 (P2-E7/E8)
+    const slashMatch = text.match(/^\/([\p{L}\p{N}_\s-]+)\s*([\s\S]*)$/u);
     if (slashMatch) {
-      const cmd = slashMatch[1];
+      const cmd = slashMatch[1].trim();
       const rest = slashMatch[2].trim();
       const isFeature = ["웹검색", "자료", "새대화", "생각"].includes(cmd);
       // features(기능 명령)는 스킬로 취급하지 않는다 → /생각 등이 쿼리로 오인되지 않게
+      // 스킬은 slashItems에서 이름(/ 제거 후)으로 정확히 매칭 (공백 포함 다단어 스킬명 지원)
       const isSkill = !isFeature && slashItems.some(s => s.name.replace(/^\//, "") === cmd);
       if (isSkill) {
         text = rest || `/${cmd} 절차를 검토해 주세요.`;
