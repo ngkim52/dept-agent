@@ -112,7 +112,7 @@ describe("POST /api/chat/stream", () => {
     const uc = userMsgs[0].content as any;
     const userText = typeof uc === "string" ? uc : (Array.isArray(uc) ? uc.map((x: any) => x.text ?? "").join("") : String(uc));
     expect(userText).toContain("[질문/업무 내용]\n심사 프로세스 검토해줘");
-    expect(ctx.systemPrompt).toContain("보험금심사기획 부서장");
+    expect(ctx.systemPrompt).toContain("신한라이프 보험금기획팀장");
 
     // DB: user 메시지 1건 + assistant 메시지 1건 저장
     const saved = await db.query.messages.findMany({ where: (m, { eq }) => eq(m.conversationId, convId) });

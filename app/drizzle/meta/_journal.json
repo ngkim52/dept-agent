@@ -15,6 +15,13 @@
       "when": 1787656952651,
       "tag": "0001_dashing_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787709594535,
+      "tag": "0002_stiff_adam_destine",
+      "breakpoints": true
     }
   ]
 }

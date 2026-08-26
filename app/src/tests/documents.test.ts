@@ -5,9 +5,13 @@ import { resetDb, withDept, withUser } from "./helpers";
 import { db, schema } from "@/lib/db";
 import { createSession } from "@/lib/auth/session";
 
-const mocks = vi.hoisted(() => ({ listDocsFn: vi.fn() }));
+const mocks = vi.hoisted(() => ({ listDocsFn: vi.fn(), uploadDocFn: vi.fn(), parseDocsFn: vi.fn() }));
 vi.mock("@/lib/ragflow/client", () => ({
-  ragflow: { listDatasetDocuments: mocks.listDocsFn },
+  ragflow: {
+  listDatasetDocuments: mocks.listDocsFn,
+  uploadDocument: mocks.uploadDocFn,
+  parseDocuments: mocks.parseDocsFn,
+},
 }));
 
 async function session(u: { id: string }) {
@@ -16,7 +20,7 @@ async function session(u: { id: string }) {
 }
 
 describe("GET /api/documents (사용자별)", () => {
-  beforeEach(async () => { await resetDb(); await withDept(); mocks.listDocsFn.mockReset(); });
+  beforeEach(async () => { await resetDb(); await withDept(); mocks.listDocsFn.mockReset(); mocks.uploadDocFn.mockReset(); mocks.parseDocsFn.mockReset(); });
 
   it("본인 문서만 반환 (타 사용자 문서는 제외)", async () => {
     const u = await withUser({});
@@ -126,5 +130,38 @@ describe("DELETE /api/documents/[id] (사용자별 삭제)", () => {
       method: "DELETE", headers: { Cookie: "dept_session=" + (await session(u)) },
     }), { params: Promise.resolve({ id: docId }) });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("POST /api/documents → RAGFlow 연동 (부서 데이터셋 연결 시)", () => {
+  beforeEach(async () => { await resetDb(); await withDept(); mocks.uploadDocFn.mockReset(); mocks.parseDocsFn.mockReset(); });
+
+  it("부서에 데이터셋이 연결돼 있으면 uploadDocument + parseDocuments 호출 및 ragflowDocId 저장", async () => {
+    mocks.uploadDocFn.mockResolvedValue({ code: 0, data: { id: "rag-doc-1" } });
+    mocks.parseDocsFn.mockResolvedValue({ code: 0 });
+    const u = await withUser({});
+    const form = new FormData();
+    form.append("file", new Blob(["손해율 자료"], { type: "text/plain" }), "손해율.txt");
+    const { POST } = await import("@/app/api/documents/route");
+    const res = await POST(new NextRequest("http://localhost/api/documents", {
+      method: "POST", headers: { Cookie: "dept_session=" + (await session(u)) }, body: form as any,
+    }));
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(mocks.uploadDocFn).toHaveBeenCalled();
+    expect(mocks.parseDocsFn).toHaveBeenCalledWith("ds-test", ["rag-doc-1"]);
+    expect(data.document.ragflowDocId).toBe("rag-doc-1");
+  });
+
+  it("RAGFlow 업로드 실패해도 로컬 업로드는 성공(비차단)", async () => {
+    mocks.uploadDocFn.mockRejectedValue(new Error("rag down"));
+    const u = await withUser({});
+    const form = new FormData();
+    form.append("file", new Blob(["내용"], { type: "text/plain" }), "a.txt");
+    const { POST } = await import("@/app/api/documents/route");
+    const res = await POST(new NextRequest("http://localhost/api/documents", {
+      method: "POST", headers: { Cookie: "dept_session=" + (await session(u)) }, body: form as any,
+    }));
+    expect(res.status).toBe(201);
   });
 });

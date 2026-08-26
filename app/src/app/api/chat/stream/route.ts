@@ -6,6 +6,7 @@ import { requireUser, jsonError, HttpError } from "@/lib/auth/http";
 import { getPersona } from "@/lib/agent/personas";
 import { retrieveDepartmentChunks, runPersonaAgent } from "@/lib/agent/engine";
 import { readUpload, uploadPath } from "@/lib/uploads";
+import { getDepartmentDatasets } from "@/lib/dataset/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -75,7 +76,8 @@ export async function POST(req: NextRequest) {
   }
 
   // RAGFlow 검색 (부서 데이터셋만) + 지정 파일 본문
-  const ragChunks = await retrieveDepartmentChunks(message, conversation.department.ragflowDatasetId);
+  const deptDatasetIds = await getDepartmentDatasets(conversation.departmentId ?? "");
+  const ragChunks = await retrieveDepartmentChunks(message, deptDatasetIds);
   const chunks = [...fileChunks, ...ragChunks];
 
   const stream = new ReadableStream<Uint8Array>({

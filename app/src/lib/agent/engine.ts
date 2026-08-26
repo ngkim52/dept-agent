@@ -25,11 +25,12 @@ export type StreamFnLike = StreamFn;
 // 부서 RAGFlow 데이터셋에서 검색 (부서 = 데이터셋 = 권한 경계)
 export async function retrieveDepartmentChunks(
   question: string,
-  datasetId: string | null | undefined
+  datasetIds: (string | null | undefined)[]
 ): Promise<RagHint[]> {
-  if (!datasetId) return [];
+  const ids = (datasetIds ?? []).filter(Boolean) as string[];
+  if (ids.length === 0) return [];
   requireRagConfig();
-  const chunks = await ragflow.retrieve(question, [datasetId]);
+  const chunks = await ragflow.retrieve(question, ids);
   return chunks.map((c) => ({
     content: c.content,
     source: c.document_name ?? c.document_id ?? "",
@@ -144,18 +145,19 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
 }
 
 /** RAG 검색 툴 — 상위 에이전트가 필요 시 부서 데이터셋에서 직접 검색 (RAGFlow 검색 툴 노출) */
-export function makeRagSearchTool(datasetId: string): AgentTool<any, { query: string }> {
+export function makeRagSearchTool(datasetIds: string[]): AgentTool<any, { query: string }> {
+  const ids = (datasetIds ?? []).filter(Boolean);
   return {
     name: "search",
     label: "부서 자료 검색",
-    description: "부서 데이터셋(RAGFlow)에서 업무 자료를 검색해 관련 내용을 찾습니다. 근거가 모호하거나 특정 문서 확인이 필요할 때 사용하세요.",
+    description: "부서 데이터셋(RagFlow)에서 업무 자료를 검색해 관련 내용을 찾습니다. 근거가 모호하거나 특정 문서 확인이 필요할 때 사용하세요.",
     parameters: Type.Object({ query: Type.String({ description: "검색할 질문/키워드" }) }),
     async execute(toolCallId: string, params: any, _signal?: AbortSignal) {
-      if (!datasetId) {
+      if (ids.length === 0) {
         return { content: [{ type: "text", text: "(검색 가능한 부서 데이터셋이 없습니다)" }], details: { query: params?.query } } as AgentToolResult<{ query: string }>;
       }
       requireRagConfig();
-      const chunks = await ragflow.retrieve(String(params?.query ?? ""), [datasetId]);
+      const chunks = await ragflow.retrieve(String(params?.query ?? ""), ids);
       const text = chunks.length
         ? chunks.map((c, i) => "[근거 " + (i + 1) + "] (출처: " + (c.document_name ?? c.document_id ?? "알수없음") + ", 유사도 " + Math.round(c.similarity * 1000) / 1000 + ")\n" + c.content).join("\n\n")
         : "(검색 결과 없음)";
@@ -209,13 +211,14 @@ export function makePythonDataTool(): AgentTool<any, { script: string; data?: st
 }
 
 /** 상위 PI 에이전트 생성 — 페르소나 + 서브에이전트 위임 + RAG 검색 툴 + 웹 검색 + 파이썬 데이터 + hooks + 스킬 */
-export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, history: PiMessage[] = [], opts: AgentOptions = {}, ragDatasetId?: string) {
+export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, history: PiMessage[] = [], opts: AgentOptions = {}, datasetIds: (string | null | undefined)[] = []) {
   const systemPrompt = buildPersonaSystemPromptWithSkills(persona.systemPrompt, getPersonaSkills(persona.key));
   // 부서별 도구 구성 (src/agent-tools/<부서키>.ts 에서 지정)
   const toolNames = getDepartmentToolNames(persona.key);
   const tools: AgentTool<any>[] = [];
   if (toolNames.includes("delegate")) tools.push(makeSubAgentDelegateTool(streamFn, model, opts));
-  if (ragDatasetId && toolNames.includes("rag_search")) tools.push(makeRagSearchTool(ragDatasetId));
+  const dsIds = (datasetIds ?? []).filter(Boolean) as string[];
+  if (dsIds.length && toolNames.includes("rag_search")) tools.push(makeRagSearchTool(dsIds));
   if (toolNames.includes("websearch")) tools.push(makeWebSearchTool());
   if (toolNames.includes("python_data")) tools.push(makePythonDataTool());
   return new Agent({

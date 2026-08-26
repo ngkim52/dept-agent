@@ -6,6 +6,7 @@ export async function resetDb() {
   await db.delete(schema.messages);
   await db.delete(schema.sessions);
   await db.delete(schema.conversations);
+  await db.delete(schema.departmentDatasets);
   await db.delete(schema.documents);
   await db.delete(schema.appSettings);
   await db.delete(schema.users);

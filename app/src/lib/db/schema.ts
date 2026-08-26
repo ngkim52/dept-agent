@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const departments = sqliteTable("departments", {
   id: text("id").primaryKey(),
@@ -9,6 +9,16 @@ export const departments = sqliteTable("departments", {
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+export const departmentDatasets = sqliteTable("department_datasets", {
+  departmentId: text("department_id").notNull().references(() => departments.id),
+  datasetId: text("dataset_id").notNull(),
+  datasetName: text("dataset_name"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.departmentId, t.datasetId] }),
+  deptIdx: index("department_datasets_dept_idx").on(t.departmentId),
+}));
 
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
@@ -104,4 +114,9 @@ export const departmentsRelations = relations(departments, ({ many }) => ({
   users: many(users),
   conversations: many(conversations),
   documents: many(documents),
+  datasets: many(departmentDatasets),
+}));
+
+export const departmentDatasetsRelations = relations(departmentDatasets, ({ one }) => ({
+  department: one(departments, { fields: [departmentDatasets.departmentId], references: [departments.id] }),
 }));

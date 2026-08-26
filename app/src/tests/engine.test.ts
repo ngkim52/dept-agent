@@ -62,7 +62,7 @@ describe("runPersonaAgent", () => {
     expect(text).toBe("안녕");
     expect(mocks.streamFn).toHaveBeenCalled();
     const ctx = mocks.streamFn.mock.calls[0][1] as { systemPrompt: string; messages: Array<{ role: string; content: string }> };
-    expect(ctx.systemPrompt).toContain("보험금심사기획 부서장");
+    expect(ctx.systemPrompt).toContain("신한라이프 보험금기획팀장");
     const msgs = ctx.messages;
     // RAG(user) + 이전 질문(user) + 현재 질문(user) = user 3건
     const userContents = msgs.filter((m) => m.role === "user").map((m) => {

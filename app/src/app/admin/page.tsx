@@ -36,6 +36,14 @@ export default function AdminPage() {
   const [gateways, setGateways] = useState<{ id: string; label: string; baseUrl: string; hasKey: boolean }[]>([]);
   const [activeGateway, setActiveGateway] = useState("openrouter");
 
+  // ── 부서↔데이터셋 설정 ──
+  const [deptData, setDeptData] = useState<{ id: string; name: string; datasetIds: string[] }[]>([]);
+  const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+  const [deptLoading, setDeptLoading] = useState(false);
+  const [deptSaved, setDeptSaved] = useState("");
+  const [deptDrafts, setDeptDrafts] = useState<Record<string, string[]>>({});
+  const [deptError, setDeptError] = useState("");
+
   async function load() {
     const d = await (await fetch("/api/admin/users")).json();
     setUsers(d.users ?? []);
@@ -48,6 +56,7 @@ export default function AdminPage() {
       if (d.user.role !== "admin") { router.replace("/chat"); return; }
       load();
       loadModelConfig();
+      loadDeptData();
     });
   }, [router]);
 
@@ -87,6 +96,52 @@ export default function AdminPage() {
       setModelDrafts(drafts);
     } catch { setModelError("설정 조회 실패"); }
   }
+
+  async function loadDeptData() {
+    setDeptLoading(true); setDeptError(""); setDeptSaved("");
+    try {
+      const d = await (await fetch("/api/admin/departments")).json();
+      if (d.error) { setDeptError(d.error); return; }
+      setDeptData(d.departments ?? []);
+      setDatasets(d.datasets ?? []);
+    } catch { setDeptError("부서/데이터셋 조회 실패"); }
+    finally { setDeptLoading(false); }
+  }
+
+  async function saveDeptDatasets(deptId: string, ids: string[]) {
+    setDeptSaved(""); setDeptError("");
+    try {
+      const res = await fetch("/api/admin/departments", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ departmentId: deptId, datasetIds: ids }),
+      });
+      const d = await res.json();
+      if (!res.ok) { setDeptError(d.error ?? "저장 실패"); return; }
+      setDeptSaved("저장 완료 — RAG 검색에 즉시 반영됩니다");
+      setDeptDrafts(p => ({ ...p, [deptId]: ids }));
+      loadDeptData();
+    } catch { setDeptError("저장 실패"); }
+  }
+
+  // 체크박스 토글
+  function toggleDeptDataset(deptId: string, datasetId: string, checked: boolean) {
+    setDeptDrafts(prev => {
+      const cur = prev[deptId] ?? deptData.find(d => d.id === deptId)?.datasetIds ?? [];
+      const next = checked ? [...cur, datasetId] : cur.filter(x => x !== datasetId);
+      return { ...prev, [deptId]: next };
+    });
+  }
+
+  // 부서 드래프트: 서버에서 로드되면 동기화
+  useEffect(() => {
+    const init: Record<string, string[]> = {};
+    for (const d of deptData) init[d.id] = d.datasetIds ?? [];
+    setDeptDrafts(prev => {
+      // 새 부서 로드 시에만 초기화 (사용자 편집 보존)
+      return { ...prev, ...init };
+    });
+  }, [deptData]);
 
   async function loadGatewayModels() {
     setModelLoading(true); setModelError(""); setModelSaved("");
@@ -312,6 +367,89 @@ export default function AdminPage() {
 
           <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink-faint">
             API 키는 환경변수(LLM_API_KEY)로만 보관됩니다. UI에는 저장되지 않습니다. 모델 목록은 서버에서 조회됩니다.
+          </p>
+        </div>
+
+        {/* ── 부서 ↔ RAGFlow 데이터셋 연동 ── */}
+        <div className="mt-12 border-t border-line pt-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Admin · RAG 연동</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold tracking-tight text-ink">부서 ↔ 데이터셋</h2>
+              <p className="mt-1 text-sm text-ink-soft">각 부서가 RAG 검색에 사용할 RAGFlow 데이터셋을 연결합니다.</p>
+            </div>
+            <button onClick={loadDeptData} disabled={deptLoading}
+              className="lift rounded-md border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-accent-soft hover:text-accent disabled:opacity-50">
+              {deptLoading ? "불러오는 중…" : "새로고침"}
+            </button>
+          </div>
+
+          {deptError && <p role="alert" className="mt-4 rounded-md bg-pale-red px-3 py-2 text-xs leading-relaxed text-pale-red-text">{deptError}</p>}
+          {deptSaved && <p className="mt-4 rounded-md bg-pale-green px-3 py-2 text-xs leading-relaxed text-pale-green-text">{deptSaved}</p>}
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-line bg-surface">
+            {deptData.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-ink-faint">부서 정보가 없습니다.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left">
+                    {["부서", "연결할 데이터셋 (복수 선택)", ""].map((th, i) => (
+                      <th key={i} className={`${i === 0 ? "pl-5" : ""} ${i === 2 ? "pr-5" : ""} py-2.5 font-mono text-[11px] font-medium uppercase tracking-[0.15em] text-ink-faint`}>{th || "작업"}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {deptData.map(d => {
+                    const draft = deptDrafts[d.id] ?? d.datasetIds ?? [];
+                    const savedCount = (d.datasetIds ?? []).length;
+                    return (
+                      <tr key={d.id} className="transition-colors hover:bg-canvas">
+                        <td className="py-3 pl-5 align-top">
+                          <p className="font-medium text-ink">{d.name}</p>
+                          <p className="font-mono text-[10px] text-ink-faint">{d.id}</p>
+                        </td>
+                        <td className="py-3 pr-4 align-top">
+                          <div className="flex flex-wrap gap-2">
+                            {datasets.length === 0 && <span className="text-xs text-ink-faint">RAGFlow 데이터셋이 없습니다.</span>}
+                            {datasets.map(ds => {
+                              const checked = draft.includes(ds.id);
+                              return (
+                                <label key={ds.id} className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                                  checked ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-canvas hover:text-ink"
+                                }`}>
+                                  <input type="checkbox"
+                                    checked={checked}
+                                    onChange={e => toggleDeptDataset(d.id, ds.id, e.target.checked)}
+                                    className="h-3.5 w-3.5 accent-[#2b2b28]" />
+                                  <span className="max-w-[16rem] truncate">{ds.name}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        <td className="py-3 pr-5 text-right align-top">
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`rounded-full px-2.5 py-1 font-mono text-[10px] ${
+                              savedCount ? "bg-pale-green text-pale-green-text" : "bg-pale-amber text-pale-amber-text"
+                            }`}>
+                              {savedCount > 0 ? `${savedCount}개 연결됨` : "미연결"}
+                            </span>
+                            <button onClick={() => saveDeptDatasets(d.id, draft)}
+                              className="lift rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#33312E]">
+                              저장
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <p className="mt-4 font-mono text-[11px] text-ink-faint">
+            RAGFlow 데이터셋: <span className="text-ink-soft">{datasets.length}개</span>
           </p>
         </div>
       </div>
