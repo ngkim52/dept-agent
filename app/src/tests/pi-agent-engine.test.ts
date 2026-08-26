@@ -56,7 +56,7 @@ describe("PI 에이전트 (pi-agent-core Agent) 엔진", () => {
   it("buildPiAgent는 persona.systemPrompt를 사용하고 tools에 delegate 툴 포함", () => {
     const persona = getPersona("claims-planning")!;
     const agent = buildPiAgent(persona, textStreamFn("답변"), model);
-    expect(agent.state.systemPrompt).toContain("보험금심사기획 부서장");
+    expect(agent.state.systemPrompt).toContain("신한라이프 보험금기획팀장");
     expect(agent.state.tools.map((x) => x.name)).toContain("delegate");
     expect(agent.state.model).toBe(model);
   });
