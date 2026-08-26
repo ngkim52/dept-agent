@@ -158,3 +158,27 @@ wb.save(${JSON.stringify(tmp)})
     expect(r.stdout).toContain("SUM_A= 1500000");
   });
 });
+
+describe("python_data 툴 보안(업로드 경로 신뢰 경계)", () => {
+  const allowedPath = "/data/uploads/doc-abc/file";
+  it("허용된 업로드 경로면 실행 시도(ok 분기 진입)", async () => {
+    const tool = makePythonDataTool([{ id: "doc-1", filename: "유량표.xlsx", filePath: allowedPath }]);
+    const r = await tool.execute("t", { script: "print('hi')", filePath: allowedPath }, undefined as any);
+    // 경로가 허용 목록에 있으므로 파이썬 실행(실패여부 무관) — ok 호출이 아닌 경로차단이 아닌지 확인
+    expect(r.details).toBeDefined();
+  });
+
+  it("허용 목록에 없는 filePath는 차단(민감 파일 경로 방지)", async () => {
+    const tool = makePythonDataTool([{ id: "doc-1", filename: "a.csv", filePath: "/data/uploads/doc-1/file" }]);
+    const r = await tool.execute("t2", { script: "print(open('/etc/passwd').read())", filePath: "/etc/passwd" }, undefined);
+    // 외부 경로를 LLM이 넣으면 실행이 아니라 차단 메시지
+    const content = (r.content?.[0] as any)?.text ?? "";
+    expect(content).toContain("지정한 파일");
+  });
+
+  it("filePath 미지정(데이터 문자열만)은 여전히 동작", async () => {
+    const tool = makePythonDataTool();
+    const r = await tool.execute("t3", { script: "print('ok')", data: "a,b\n1,2" }, undefined);
+    expect(r.details).toBeDefined();
+  });
+});

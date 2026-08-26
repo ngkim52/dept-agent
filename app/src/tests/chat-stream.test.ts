@@ -103,6 +103,10 @@ describe("POST /api/chat/stream", () => {
     expect(body).toContain("data: {\"delta\":\"부서장");
     expect(body).toContain("event: done");
 
+    // 진행 패널: 부서 RAG 조회가 도구 단계로 노출되는지 (툴 사용 0개 문제 회귀 방지)
+    expect(body).toContain("RAG 자료 검색");
+    expect(body).toContain("event: progress");
+
     // LLM에게 전달된 메시지 검증
     const ctx = mocks.streamFn.mock.calls[0][1] as { systemPrompt: string; messages: Array<{ role: string; content: unknown }> };
     const msgs = ctx.messages;

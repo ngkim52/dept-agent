@@ -73,9 +73,23 @@ export async function execPython({
   await writeFile(scriptPath, buildPrelude(dataPath, filePath) + "\n" + script, "utf8");
 
   try {
+    // 보안: 자식 프로세스에 민감 키(LLM/RAGFlow/Serper 등)를 절대 상속하지 않는다.
+    // 허용 항목은 파이썬 실행에 필요한 최소 env만. 그 외(cwd·업로드 데이터)는 temp 파일로 제한.
+    const NODE_ENV: "development" | "production" | "test" =
+      process.env.NODE_ENV === "test" || process.env.NODE_ENV === "development" ? process.env.NODE_ENV : "production";
+    const minimalEnv: NodeJS.ProcessEnv = {
+      PATH: process.env.PATH ?? "/usr/bin",
+      HOME: process.env.HOME ?? `/tmp`,
+      TMPDIR: process.env.TMPDIR ?? os.tmpdir(),
+      LANG: process.env.LANG ?? "C.UTF-8",
+      PYTHONIOENCODING: "utf-8",
+      PYTHONPATH: "",
+      NODE_ENV,
+    };
     const { stdout, stderr } = await execFileAsync(PYTHON, [scriptPath], {
       timeout: TIMEOUT_MS,
       maxBuffer: 4 * 1024 * 1024,
+      env: minimalEnv,
     });
     return {
       ok: true,

@@ -8,6 +8,7 @@ export interface RagChunk {
   similarity: number;
   document_id?: string;
   document_name?: string;
+  document_keyword?: string;
 }
 
 export class RagflowClient {
@@ -73,11 +74,19 @@ export class RagflowClient {
   }
 
   async retrieve(question: string, datasetIds: string[], topK = config.rag.topK, similarityThreshold = config.rag.similarityThreshold): Promise<RagChunk[]> {
-    const d = await this.request<{ code: number; data: { chunks: RagChunk[] } }>("/api/v1/retrieval", {
+    const d = await this.request<{ code: number; data: { chunks: any[] } }>("/api/v1/retrieval", {
       method: "POST",
       body: JSON.stringify({ question, dataset_ids: datasetIds, top_k: topK, similarity_threshold: similarityThreshold, page: 1, page_size: topK }),
     });
-    return d.data?.chunks ?? [];
+    // RAGFlow가 반환하는 문서명은 document_keyword(파일명) 필드. document_name으로 정규화.
+    return (d.data?.chunks ?? []).map((c) => ({
+      id: String(c?.id ?? ""),
+      content: String(c?.content ?? ""),
+      similarity: Number(c?.similarity ?? 0),
+      document_id: c?.document_id,
+      document_keyword: c?.document_keyword,
+      document_name: String(c?.document_name ?? c?.document_keyword ?? ""),
+    }));
   }
 
   async listDatasetDocuments(datasetId: string): Promise<RagDocumentEntry[]> {

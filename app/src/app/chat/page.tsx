@@ -4,9 +4,19 @@ import { useRouter } from "next/navigation";
 
 type User = { id: string; email: string; name: string; role: string; departmentId: string };
 type Conv = { id: string; title: string; departmentId: string; createdAt: string };
-type Citation = { source?: string; content?: string; similarity?: number };
+type Citation = { type?: "rag" | "web"; source?: string; content?: string; similarity?: number; url?: string; title?: string };
 type ChatMsg = { id: string; role: "user" | "assistant"; content: string; citations?: Citation[]; createdAt: string };
 export type Progress = { phase: "thinking" | "tool" | "tool_done" | "done"; detail?: string; toolName?: string; ok?: boolean; args?: unknown };
+
+// 도구명 → 한국어 표시명 (진행 패널용)
+const TOOL_LABELS: Record<string, string> = {
+  websearch: "웹 검색",
+  "RAG 자료 검색": "부서 자료 조회 (RAG)",
+  rag_search: "부서 자료 검색",
+  python_data: "데이터 처리 (파이썬)",
+  delegate: "부서 서브에이전트 위임",
+  search: "부서 자료 검색",
+};
 
 /* ---- 부서(페르소나) 표현 ---- */
 const PERSONAS: Record<string, { name: string; mono: string }> = {
@@ -343,7 +353,7 @@ export default function ChatPage() {
             // 진행 상황 (thinking/tool) — args까지 보존해 확장 시 상세 표시. 완료(done) 후에도 패널은 남긴다.
             const p: Progress = data.phase === "tool"
               ? { phase: "tool", toolName: data.toolName ?? "", args: data.args ?? undefined, detail: data.args ? undefined : `도구 실행: ${data.toolName}` }
-              : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "", ok: data.ok ?? true }
+              : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "", ok: data.ok ?? true, args: data.args ?? undefined, detail: data.detail ?? undefined }
               : data.phase === "done" ? { phase: "done" }
               : { phase: "thinking", detail: data.detail ?? "생각하는 중입니다" };
             
@@ -665,17 +675,37 @@ export default function ChatPage() {
                     <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
                   </span>
                   부서장 진행 상황
-                  <span className="font-mono text-[10px] text-ink-faint">· {progress.filter(p => p.phase === "tool").length}개 도구</span>
+                  <span className="font-mono text-[10px] text-ink-faint">· {progress.filter(p => p.phase === "tool").length}개 작업 단계</span>
                 </button>
                 {progressOpen && (
                   <div className="space-y-1.5 border-t border-line px-4 py-3">
                     {progress.map((p, i) => {
-                      const label = p.phase === "thinking" ? ((p.detail ?? "생각하는 중입니다").slice(0, 60) + ((p.detail?.length ?? 0) > 60 ? "…" : ""))
-                        : p.phase === "tool" ? (p.detail ?? `도구 실행: ${p.toolName}`)
-                        : p.phase === "tool_done" ? `도구 완료: ${p.toolName}${p.ok === false ? " (실패)" : ""}`
-                        : "응답 완료";
-                      const hasDetail = p.phase === "thinking" ? (p.detail != null && p.detail.length > 0)
-                        : (p.args !== undefined && p.args !== null);
+                      // 단계 라벨 — 한국어로 명확히. thinking은 raw 추론이 아니라 작업 단계로 표시.
+                      let label: string; let stepLabel: string;
+                      if (p.phase === "thinking") {
+                        stepLabel = "검토";
+                        label = p.detail && p.detail.trim().length > 0
+                          ? "부서장이 답변을 검토 중 · 추론 상세보기를 펼치세요"
+                          : "부서장이 질문을 분석하고 있습니다";
+                      } else if (p.phase === "tool") {
+                        stepLabel = "도구 실행";
+                        const tname = TOOL_LABELS[p.toolName ?? ""] ?? p.toolName ?? "작업";
+                        label = `도구 실행: ${tname}`;
+                      } else if (p.phase === "tool_done") {
+                        stepLabel = "도구 완료";
+                        const tname = TOOL_LABELS[p.toolName ?? ""] ?? p.toolName ?? "작업";
+                        // args에 datasets/count 있으면 요약 표시
+                        const a = (p.args ?? {}) as any;
+                        const summary = a?.datasets && Array.isArray(a.datasets)
+                          ? ` · ${a.datasets.map((d: any) => d.name ?? d).join(", ")} 조회`
+                          : "";
+                        label = `완료: ${tname}${a?.count != null ? ` (${a.count}건)` : ""}${summary}${p.ok === false ? " (실패)" : ""}`;
+                      } else {
+                        stepLabel = "완료";
+                        label = "응답 완료";
+                      }
+                      const hasDetail = p.phase === "thinking" ? (p.detail != null && p.detail.trim().length > 0)
+                        : (p.args !== undefined && p.args !== null && JSON.stringify(p.args) !== "{}");
                       const isOpen = expandedIdx === i;
                       return (
                         <div key={i} className="flex flex-col gap-1">
@@ -704,9 +734,34 @@ export default function ChatPage() {
                             )}
                           </div>
                           {hasDetail && isOpen && (
-                            <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-lg border border-line bg-canvas px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-soft">
-                              {p.phase === "thinking" ? p.detail : (typeof p.args === "string" ? p.args : JSON.stringify(p.args, null, 2))}
-                            </pre>
+                            p.phase === "thinking" ? (
+                              <div className="rounded-lg border border-line bg-canvas px-3 py-2">
+                                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">추론 (reasoning)</p>
+                                <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ink-soft">{p.detail}</pre>
+                              </div>
+                            ) : p.phase === "tool" || p.phase === "tool_done" ? (
+                              <div className="rounded-lg border border-line bg-canvas px-3 py-2">
+                                <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">{TOOL_LABELS[p.toolName ?? ""] ?? p.toolName}</p>
+                                {p.toolName === "RAG 자료 검색" && p.args ? (
+                                  <div className="mt-1 space-y-1">
+                                    {(() => { const a = p.args as any; return a?.datasets && Array.isArray(a.datasets) ? a.datasets.map((d: any) => (
+                                      <div key={d.id ?? d} className="flex items-center gap-2 text-[11px] text-ink-soft">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-pale-green-text" />
+                                        <span className="font-medium">{d.name ?? d}</span>
+                                        <span className="font-mono text-[10px] text-ink-faint">{d.id}</span>
+                                      </div>
+                                    )) : null; })()}
+                                    {p.args && typeof p.args === "object" ? (
+                                      <p className="mt-1.5 font-mono text-[10px] text-ink-faint">검색 결과 {((p.args as any).count ?? "")}건</p>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ink-soft">
+                                    {typeof p.args === "string" ? p.args : JSON.stringify(p.args, null, 2)}
+                                  </pre>
+                                )}
+                              </div>
+                            ) : null
                           )}
                         </div>
                       );
@@ -737,13 +792,32 @@ export default function ChatPage() {
                         <div className="mt-3 border-t border-line pt-2.5">
                           <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료 · {m.citations.length}</p>
                           <ul className="mt-1.5 space-y-1">
-                            {m.citations.map((c, i) => (
-                              <li key={i} className="flex items-center gap-2 rounded-md bg-canvas px-2.5 py-1.5 text-xs text-ink-soft">
-                                <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                                <span className="truncate">{c.source || "출처 알 수 없음"}</span>
-                                <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">{c.similarity ? `${Math.round(c.similarity * 100)}%` : ""}</span>
-                              </li>
-                            ))}
+                            {m.citations.map((c, i) => {
+                              const isWeb = c.type === "web" || !!c.url;
+                              return (
+                                <li key={i} className="group text-xs text-ink-soft">
+                                  <div className="flex items-center gap-2 rounded-md bg-canvas px-2.5 py-1.5">
+                                    <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${isWeb ? "bg-accent-soft" : "bg-accent"}`} />
+                                    <span className="truncate">{c.source || "출처 알 수 없음"}</span>
+                                    {isWeb ? (
+                                      <a href={c.url} target="_blank" rel="noreferrer"
+                                        className="ml-auto shrink-0 inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-accent hover:underline">
+                                        링크
+                                        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" /></svg>
+                                      </a>
+                                    ) : (
+                                      c.similarity ? <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">{Math.round(c.similarity * 100)}%</span> : null
+                                    )}
+                                  </div>
+                                  {c.content && (
+                                    <details className="mt-0.5 ml-4 rounded-md bg-canvas px-2.5 py-1">
+                                      <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink">{isWeb ? "웹 요약 보기" : "청크 보기"}</summary>
+                                      <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-ink-soft">{c.content}</p>
+                                    </details>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       )}

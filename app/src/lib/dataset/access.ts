@@ -13,6 +13,18 @@ export async function getDepartmentDatasets(departmentId: string): Promise<strin
   return dept?.ragflowDatasetId ? [dept.ragflowDatasetId] : [];
 }
 
+// 부서에 연결된 RAGFlow 데이터셋 (id + 이름) 반환 — 진행표시/로깅용
+export async function getDepartmentDatasetInfos(departmentId: string): Promise<{ id: string; name: string }[]> {
+  if (!departmentId) return [];
+  const rows = await db.query.departmentDatasets.findMany({
+    where: (t, { eq }) => eq(t.departmentId, departmentId),
+  });
+  if (rows.length) return rows.map(r => ({ id: r.datasetId, name: r.datasetName || r.datasetId }));
+  const dept = await db.query.departments.findFirst({ where: eq(schema.departments.id, departmentId) });
+  if (!dept?.ragflowDatasetId) return [];
+  return [{ id: dept.ragflowDatasetId, name: dept.name }];
+}
+
 export async function setDepartmentDatasets(departmentId: string, datasetIds: string[]): Promise<void> {
   await db.delete(schema.departmentDatasets).where(eq(schema.departmentDatasets.departmentId, departmentId));
   for (const ds of datasetIds) {

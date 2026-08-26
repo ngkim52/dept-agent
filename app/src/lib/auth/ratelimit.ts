@@ -6,10 +6,23 @@ const DEFAULT_MAX = 10;
 
 const hits = new Map<string, { count: number; resetAt: number }>();
 
-export function clientIp(req: NextRequest): string {
+// 프레임/로드밸런서가 설정하는 신뢰 채널의 IP만 사용한다.
+// - X-Real-IP(신뢰 프록시가 주입)를 최우선으로.
+// - 없으면 X-Forwarded-For의 가장 오른쪽(프록시가 덧붙이는 최신 홉)을 사용.
+//   클라이언트가 첫 칸을 위조해도 신뢰 프록시가 실제 IP를 뒤쪽에 추가하므로 첫 값을 쓰지 않는다.
+function trustedClientIp(req: NextRequest): string {
+  const real = req.headers.get("x-real-ip");
+  if (real && real.trim()) return real.trim();
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
-  return req.headers.get("x-real-ip") ?? "unknown";
+  if (fwd) {
+    const hops = fwd.split(",").map((s) => s.trim()).filter(Boolean);
+    if (hops.length) return hops[hops.length - 1];
+  }
+  return "unknown";
+}
+
+export function clientIp(req: NextRequest): string {
+  return trustedClientIp(req);
 }
 
 export interface RateLimitResult {

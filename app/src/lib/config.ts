@@ -36,7 +36,7 @@ export const config = {
     tavilyApiKey: process.env.TAVILY_API_KEY ?? "",
   },
   rag: {
-    topK: Number(process.env.RAG_TOP_K ?? "5"),
+    topK: Number(process.env.RAG_TOP_K ?? "10"),
     similarityThreshold: Number(process.env.RAG_SIMILARITY_THRESHOLD ?? "0.2"),
   },
 } as const;

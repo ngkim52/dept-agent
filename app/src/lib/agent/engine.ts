@@ -14,7 +14,8 @@ import type { Model, Message as PiMessage } from "@earendil-works/pi-ai";
 
 export interface RagHint {
   content: string;
-  source: string;
+  source: string;      // 표시용 문서명 (확장자 제거)
+  documentId?: string; // RAGFlow 문서 id
   similarity: number;
 }
 
@@ -33,7 +34,8 @@ export async function retrieveDepartmentChunks(
   const chunks = await ragflow.retrieve(question, ids);
   return chunks.map((c) => ({
     content: c.content,
-    source: c.document_name ?? c.document_id ?? "",
+    source: (c.document_name ?? c.document_id ?? "").replace(/\.[a-z0-9]{1,6}$/i, ""), // 확장자 제거
+    documentId: c.document_id,
     similarity: c.similarity,
   }));
 }
@@ -91,6 +93,8 @@ export interface AgentOptions {
   transformContext?: (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]>;
   /** "@파일명" 으로 지정된 업로드 파일 정보 (경로·이름) — python_data 툴이 직접 읽어 엑셀/CSV 처리 */
   uploadFiles?: { id: string; filename: string; filePath: string }[];
+  /** 웹서치 결과가 있을 때 근거로 수집하기 위한 콜백 */
+  onWebCitation?: (c: { title: string; url: string; snippet: string }) => void;
 }
 
 export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: AgentOptions = {}): AgentTool<any, { department: SubAgentDepartment }> {
@@ -167,16 +171,22 @@ export function makeRagSearchTool(datasetIds: string[]): AgentTool<any, { query:
 }
 
 /** 웹 검색 툴 — 보험·규제·시장 정보 등 최신 외부 정보가 필요할 때 웹에서 검색 (Serper/Tavily) */
-export function makeWebSearchTool(): AgentTool<any, { query: string }> {
+export function makeWebSearchTool(opts: AgentOptions = {}): AgentTool<any, { query: string }> {
   return {
     name: "websearch",
     label: "웹 검색",
     description:
-      "인터넷에서 최신 정보를 검색합니다. 보험 규제 변경, 시장 동향, 금융감독원/국민연금 등 외부 최신 소식이 필요할 때 사용하세요. 부서 자료(RAG)에서 답을 찾지 못했을 때 활용합니다.",
+      "인터넷에서 최신 정보를 검색합니다. 보험 규제 변경, 시장 동향, 금융감독원/국민연금 등 외부 최신 소식이 필요할 때 사용하세요. 세부 브라우저에서 답을 찾지 못했을 때 활용합니다.",
     parameters: Type.Object({ query: Type.String({ description: "검색할 질문/키워드" }) }),
     async execute(toolCallId: string, params: any, _signal?: AbortSignal) {
       const q = String(params?.query ?? "").trim();
       const res = await webSearch(q || "대한민국 보험 규제 동향");
+      // 웹 검색 결과를 근거로 수집 (외부 링크 표시용)
+      if (res.ok && res.results.length && opts.onWebCitation) {
+        for (const r of res.results) {
+          opts.onWebCitation({ title: r.title, url: r.url, snippet: r.snippet });
+        }
+      }
       const text = formatSearchResults(q, res);
       return { content: [{ type: "text", text }], details: { query: q, provider: res.provider, count: res.results.length } } as AgentToolResult<{ query: string }>;
     },
@@ -184,7 +194,9 @@ export function makeWebSearchTool(): AgentTool<any, { query: string }> {
 }
 
 /** 파이썬 데이터 처리 툴 — 업로드/데이터(엑셀·CSV 등)를 pandas로 집계·가공. 코드는 서버가 생성한 검증된 스크립트를 실행 */
-export function makePythonDataTool(): AgentTool<any, { script: string; data?: string; filePath?: string; description?: string }> {
+export function makePythonDataTool(
+  uploadFiles: AgentOptions["uploadFiles"] = []
+): AgentTool<any, { script: string; data?: string; filePath?: string; description?: string }> {
   return {
     name: "python_data",
     label: "데이터 처리 (파이썬)",
@@ -199,9 +211,17 @@ export function makePythonDataTool(): AgentTool<any, { script: string; data?: st
     async execute(toolCallId: string, params: any) {
       const script = String(params?.script ?? "").trim();
       const data = String(params?.data ?? "").slice(0, 200_000);
-      const filePath = String(params?.filePath ?? "");
+      const filePath = String(params?.filePath ?? "").trim();
       if (!script) {
         return { content: [{ type: "text", text: "스크립트가 비어 있습니다." }], details: { ok: false } } as AgentToolResult<any>;
+      }
+      // 보안: 업로드 파일만 접근 — LLM이 외부/시스템 경로를 지목하면 차단
+      if (filePath) {
+        const allowed = (uploadFiles ?? []).map((f) => f.filePath);
+        const ok = allowed.some((p) => p === filePath);
+        if (!ok) {
+          return { content: [{ type: "text", text: "요청한 filePath는 이 대화에서 지정한 업로드 파일이 아닙니다. '@파일명'으로 지정한 파일의 경로만 사용할 수 있습니다." }], details: { ok: false, blocked: true } } as AgentToolResult<any>;
+        }
       }
       const r = await execPython({ script, inputData: data, filePath: filePath || undefined });
       const text = r.ok ? r.stdout : "데이터 처리 실패:\n" + (r.stderr || "");
@@ -219,8 +239,8 @@ export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, h
   if (toolNames.includes("delegate")) tools.push(makeSubAgentDelegateTool(streamFn, model, opts));
   const dsIds = (datasetIds ?? []).filter(Boolean) as string[];
   if (dsIds.length && toolNames.includes("rag_search")) tools.push(makeRagSearchTool(dsIds));
-  if (toolNames.includes("websearch")) tools.push(makeWebSearchTool());
-  if (toolNames.includes("python_data")) tools.push(makePythonDataTool());
+  if (toolNames.includes("websearch")) tools.push(makeWebSearchTool(opts));
+  if (toolNames.includes("python_data")) tools.push(makePythonDataTool(opts.uploadFiles));
   return new Agent({
     streamFn,
     transformContext: opts.transformContext,
@@ -296,7 +316,8 @@ export async function runPersonaAgent(
   ragChunks: RagHint[],
   cb: StreamCallbacks,
   opts: AgentOptions = {}
-): Promise<{ text: string }> {
+): Promise<{ text: string; webCitations: { title: string; url: string; snippet: string }[] }> {
+  const webCitations: { title: string; url: string; snippet: string }[] = [];
   const { models, model } = await getLlmModel("response");
   const streamFn = models.streamSimple.bind(models);
 
@@ -354,7 +375,11 @@ export async function runPersonaAgent(
         return [systemRag, ...messages];
       }
     : undefined;
-  const agent = buildPiAgent(persona, streamFn, model, historyForAgent, { ...opts, transformContext });
+  const agent = buildPiAgent(persona, streamFn, model, historyForAgent, {
+    ...opts,
+    transformContext,
+    onWebCitation: (c) => { webCitations.push(c); opts.onWebCitation?.(c); },
+  });
 
   let text = "";
   let thinkingBuf = "";
@@ -370,18 +395,24 @@ export async function runPersonaAgent(
       const am = ev.assistantMessageEvent as any;
       if (am.type === "thinking_start") { thinkingBuf = ""; thinkingStarted = true; }
       else if (am.type === "thinking_delta") {
-        thinkingBuf = (thinkingBuf + (am.delta ?? "")).slice(-4000);
+        thinkingBuf = (thinkingBuf + (am.delta ?? "")).slice(-100000);
         if (cb.onProgress) cb.onProgress({ type: "thinking", detail: thinkingBuf.trim() || "생각하는 중입니다" });
       }
     }
     const et = ev.type as string;
     if (cb.onProgress && (et === "tool_execution_start" || et === "tool_execution_end" || et === "agent_start" || et === "turn_start" || et === "agent_end")) {
-      cb.onProgress(
-        et === "tool_execution_start" ? { type: "tool_start", toolName: (ev as any).toolName, args: (ev as any).args }
-        : et === "tool_execution_end" ? { type: "tool_end", toolName: (ev as any).toolName, ok: !(ev as any).isError }
-        : et === "agent_start" || et === "turn_start" ? { type: "thinking", detail: thinkingBuf.trim() || "부서장이 업무를 검토하고 있습니다" }
-        : { type: "done" }
-      );
+      if (et === "tool_execution_start") {
+        cb.onProgress({ type: "tool_start", toolName: (ev as any).toolName, args: (ev as any).args });
+        // 도구 실행 직후 한국어 단계 문구 + 직전까지의 추론 스냅샷을 함께 표시
+        cb.onProgress({ type: "thinking", detail: (thinkingBuf.trim() || "") + "\n\n[도구 실행] " + ((ev as any).toolName || "") });
+      } else if (et === "tool_execution_end") {
+        cb.onProgress({ type: "tool_end", toolName: (ev as any).toolName, ok: !(ev as any).isError });
+        cb.onProgress({ type: "thinking", detail: thinkingBuf.trim() || "부서장이 업무를 검토하고 있습니다" });
+      } else if (et === "agent_start" || et === "turn_start") {
+        cb.onProgress({ type: "thinking", detail: thinkingBuf.trim() || "부서장이 질문을 분석하고 있습니다" });
+      } else if (et === "agent_end") {
+        cb.onProgress({ type: "done" });
+      }
     }
   });
 
@@ -390,5 +421,5 @@ export async function runPersonaAgent(
   );
 
   unsubscribe();
-  return { text };
+  return { text, webCitations: [...new Map(webCitations.map((c) => [c.url, c])).values()] };
 }

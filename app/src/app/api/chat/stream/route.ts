@@ -6,7 +6,7 @@ import { requireUser, jsonError, HttpError } from "@/lib/auth/http";
 import { getPersona } from "@/lib/agent/personas";
 import { retrieveDepartmentChunks, runPersonaAgent } from "@/lib/agent/engine";
 import { readUpload, uploadPath } from "@/lib/uploads";
-import { getDepartmentDatasets } from "@/lib/dataset/access";
+import { getDepartmentDatasets, getDepartmentDatasetInfos } from "@/lib/dataset/access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
 
   // RAGFlow 검색 (부서 데이터셋만) + 지정 파일 본문
   const deptDatasetIds = await getDepartmentDatasets(conversation.departmentId ?? "");
+  const deptDatasetInfos = await getDepartmentDatasetInfos(conversation.departmentId ?? "");
   const ragChunks = await retrieveDepartmentChunks(message, deptDatasetIds);
   const chunks = [...fileChunks, ...ragChunks];
 
@@ -85,6 +86,11 @@ export async function POST(req: NextRequest) {
       const send = (ev: string, data: unknown) => controller.enqueue(sse(ev, data));
       let assistantText = "";
       try {
+        // RAG 사전 조회 결과를 진행 단계로 노출 (자동 조회도 어떤 작업인지 보이도록)
+        if (deptDatasetIds.length > 0) {
+          send("progress", { phase: "tool", toolName: "RAG 자료 검색", args: { datasets: deptDatasetInfos, count: ragChunks.length } });
+          send("progress", { phase: "tool_done", toolName: "RAG 자료 검색", ok: true, args: { datasets: deptDatasetInfos, count: ragChunks.length } });
+        }
         if (chunks.length === 0) {
           await new Promise((r) => setTimeout(r, 300)); // RAG 검색 시간치(추적용)
         }
@@ -93,7 +99,7 @@ export async function POST(req: NextRequest) {
         const thinkingLevel = ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(body.thinkingLevel)
           ? body.thinkingLevel
           : "off";
-        await runPersonaAgent(persona, message, history, chunks, {
+        const { webCitations } = await runPersonaAgent(persona, message, history, chunks, {
           onTextDelta(delta) { assistantText += delta; send("text_delta", { delta }); },
           onProgress(ev) {
             if (ev.type === "thinking") send("progress", { phase: "thinking", detail: ev.detail ?? "생각 중" });
@@ -102,15 +108,22 @@ export async function POST(req: NextRequest) {
             else if (ev.type === "done") send("progress", { phase: "done" });
           },
         }, { thinkingLevel, uploadFiles });
+        // 근거(citations) 통합: RAG 청크 + 웹 검색 결과 (외부 링크 포함)
+        const citations = [
+          ...chunks.map(c => ({ type: "rag", source: c.source, content: c.content, similarity: c.similarity })),
+          ...webCitations.map(w => ({ type: "web", source: w.title, url: w.url, content: w.snippet, similarity: undefined })),
+        ];
         const assistantMessageId = randomUUID();
         await db.insert(schema.messages).values({
           id: assistantMessageId,
           conversationId,
           role: "assistant",
           content: assistantText,
-          citations: JSON.stringify(chunks),
+          citations: JSON.stringify(citations),
           createdAt: new Date(),
         });
+        // 최종 citations 이벤트 (웹 근거 포함)
+        send("citations", { chunks: citations });
         // 대화 제목(최초 대화면 질문 요약)
         if (conversation.title === "새 대화") {
           await db.update(schema.conversations)
