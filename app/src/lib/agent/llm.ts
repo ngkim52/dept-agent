@@ -22,7 +22,8 @@ export function buildModels(modelId?: string, gateway: string = "litellm") {
         api: "openai-completions",
         provider: gateway,
         baseUrl: gw.baseUrl,
-        reasoning: false,
+        // reasoning(thinking) 지원 여부 — 기본 true. false로 끄려면 LLM_REASONING=false
+        reasoning: process.env.LLM_REASONING !== "false",
         input: ["text"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 32768,
