@@ -155,6 +155,8 @@ export default function ChatPage() {
   const [user, setUser] = useState<User | null>(null);
   const [convs, setConvs] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const activeIdRef = useRef<string | null>(null);
+  useEffect(() => { activeIdRef.current = activeId; }, [activeId]);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -231,10 +233,9 @@ export default function ChatPage() {
 
   async function openConv(id: string) {
     setActiveId(id);
-    if (!activeConvDeptId) {
-      const cv = convs.find(c => c.id === id);
-      if (cv?.departmentId) setActiveConvDeptId(cv.departmentId);
-    }
+    // 항상 부서 갱신 — admin이 부서별 대화 전환 시 페르소나 고착 방지 (P1-A2)
+    const cv = convs.find(c => c.id === id);
+    if (cv?.departmentId) setActiveConvDeptId(cv.departmentId);
     const d = (await (await fetch(`/api/conversations/${id}`)).json()) as { messages: Array<{ id: string; role: "user" | "assistant"; content: string; citations?: string; createdAt: string }> };
     setMsgs(d.messages.map(m => ({ id: m.id, role: m.role, content: m.content, citations: m.citations ? JSON.parse(m.citations) as Citation[] : [], createdAt: m.createdAt })));
     setStreamText(""); setPendingCitations([]);
@@ -312,6 +313,7 @@ export default function ChatPage() {
       if (!c) { setError("대화를 시작할 수 없습니다. 부서를 선택해 주세요."); return; }
       convId = c;
     }
+    const targetConvId = convId; // 스트리밍 중 대화 전환 시 응답 오염 방지 (P1-A)
     setInput(""); setStreaming(true); setError(""); setStreamText(""); setPendingCitations([]);
     setProgress([{ phase: "thinking", detail: "요청을 받았습니다" }]); setProgressOpen(true);
     const userMsg: ChatMsg = { id: `u-${Date.now()}`, role: "user", content: text, createdAt: new Date().toISOString() };
@@ -345,6 +347,7 @@ export default function ChatPage() {
           const eventName = evLine.slice(6).trim();
           const data = JSON.parse(dataLines.filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).join("\n") || "{}");
           if (eventName === "text_delta") {
+            if (activeIdRef.current !== targetConvId) break; // 대화 전환 시 오염 방지
             finalText += data.delta ?? "";
             setStreamText(finalText);
           } else if (eventName === "citations") {
@@ -366,6 +369,7 @@ export default function ChatPage() {
               return [...prev, p];
             });
           } else if (eventName === "done") {
+            if (activeIdRef.current !== targetConvId) break; // 대화 전환 시 오염 방지
             finalText = data.content ?? finalText;
             setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
             setStreamText(""); setPendingCitations([]);
