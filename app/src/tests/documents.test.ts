@@ -136,7 +136,7 @@ describe("DELETE /api/documents/[id] (사용자별 삭제)", () => {
 describe("POST /api/documents → RAGFlow 연동 (부서 데이터셋 연결 시)", () => {
   beforeEach(async () => { await resetDb(); await withDept(); mocks.uploadDocFn.mockReset(); mocks.parseDocsFn.mockReset(); });
 
-  it("부서에 데이터셋이 연결돼 있으면 uploadDocument + parseDocuments 호출 및 ragflowDocId 저장", async () => {
+  it("보안(P1-B10): 개인 문서는 부서 RAG에 자동 업로드되지 않음 — ragflowDocId는 항상 null", async () => {
     mocks.uploadDocFn.mockResolvedValue({ code: 0, data: { id: "rag-doc-1" } });
     mocks.parseDocsFn.mockResolvedValue({ code: 0 });
     const u = await withUser({});
@@ -148,9 +148,9 @@ describe("POST /api/documents → RAGFlow 연동 (부서 데이터셋 연결 시
     }));
     expect(res.status).toBe(201);
     const data = await res.json();
-    expect(mocks.uploadDocFn).toHaveBeenCalled();
-    expect(mocks.parseDocsFn).toHaveBeenCalledWith("ds-test", ["rag-doc-1"]);
-    expect(data.document.ragflowDocId).toBe("rag-doc-1");
+    // 개인 문서는 @파일 지정용으로만 — 부서 공용 RAG에 자동 주입하지 않음
+    expect(mocks.uploadDocFn).not.toHaveBeenCalled();
+    expect(data.document.ragflowDocId).toBeNull();
   });
 
   it("RAGFlow 업로드 실패해도 로컬 업로드는 성공(비차단)", async () => {

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db";
 import { and, eq } from "drizzle-orm";
 import { requireUser, jsonError, HttpError } from "@/lib/auth/http";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/auth/ratelimit";
 import { getPersona } from "@/lib/agent/personas";
 import { retrieveDepartmentChunks, runPersonaAgent } from "@/lib/agent/engine";
 import type { RagHint } from "@/lib/agent/engine";
@@ -20,6 +21,10 @@ function sse(event: string, data: unknown): Uint8Array {
 export async function POST(req: NextRequest) {
   const user = await requireUser(req).catch(() => null);
   if (!user) return jsonError(new HttpError(401, "로그인이 필요합니다."));
+
+  // 채팅 rate limit: 인증 사용자당 분당 30회 (LLM 비용 남용 방지, P1-B3)
+  const rl = checkRateLimit(req, `chat:${user.id}`, 30);
+  if (!rl.ok) return rateLimitExceededResponse(rl.retryAfterSeconds);
 
   const body = await req.json().catch(() => ({}));
   const conversationId = String(body.conversationId ?? "");

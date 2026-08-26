@@ -56,27 +56,10 @@ export async function POST(req: NextRequest) {
     await saveUploadName(doc.id, file.name);
     await db.insert(schema.documents).values({ ...doc, status: doc.status === "done" ? "done" : doc.status });
 
-    // 소속 부서에 RAGFlow 데이터셋이 연결돼 있으면 문서를 RAG에 반영 (비동기, 실패해도 업로드는 성공)
-    let ragflowDocId: string | null = null;
-    let ragStatus: string = "done";
-    try {
-      // 소속 부서에 연결된 모든 RAGFlow 데이터셋에 업로드
-      const datasetIds = await getDepartmentDatasets(user.departmentId ?? "");
-      for (const dsId of datasetIds) {
-        const up = await ragflow.uploadDocument(dsId, file.name, new Blob([buf]));
-        const docId = up.data?.id ?? null;
-        if (docId) {
-          await ragflow.parseDocuments(dsId, [docId]).catch(() => {});
-          if (!ragflowDocId) ragflowDocId = docId; // 첫 데이터셋 결과를 대표로 기록
-          ragStatus = "parsing";
-        }
-      }
-    } catch (e) { console.error("ragflow upload skipped:", e); }
+    // 보안(P1-B10): 개인 문서는 부서 공용 RAG에 자동 업로드하지 않음.
+    // 개인 문서는 @파일 지정 시 python_data 툴이 직접 읽어 처리하는 용도로만 사용.
+    // 부서 공용 자료는 관리자가 별도로 RAGFlow에 업로드해야 검색에 포함됨.
 
-    if (ragflowDocId) {
-      await db.update(schema.documents).set({ ragflowDocId, status: ragStatus as any }).where(eq(schema.documents.id, doc.id));
-    }
-
-    return Response.json({ document: { id: doc.id, filename: doc.filename, size: doc.size, mimeType: doc.mimeType, status: doc.status, ragflowDocId, createdAt: doc.createdAt } }, { status: 201 });
+    return Response.json({ document: { id: doc.id, filename: doc.filename, size: doc.size, mimeType: doc.mimeType, status: doc.status, ragflowDocId: null, createdAt: doc.createdAt } }, { status: 201 });
   } catch (e) { return jsonError(e); }
 }
