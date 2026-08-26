@@ -179,6 +179,10 @@ export default function ChatPage() {
   const [myDocs, setMyDocs] = useState<{ id: string; filename: string; mimeType: string; size: number }[]>([]);
   const [fileIds, setFileIds] = useState<string[]>([]); // 전송 시 함께 보낼 지정 파일
   const [dragOver, setDragOver] = useState(false);
+  // Human-in-the-Loop: 에이전트가 추가 정보가 필요해 질문할 때 (마지막 선택지는 직접입력)
+  const [hitl, setHitl] = useState<{ question: string; options: string[] } | null>(null);
+  const [hitlManual, setHitlManual] = useState("");
+  const hitlRef = useRef<boolean>(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -336,6 +340,7 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
       let buffer = "";
       let finalText = "";
+      let hitlWaiting = false;
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -350,7 +355,24 @@ export default function ChatPage() {
           if (eventName === "text_delta") {
             if (activeIdRef.current !== targetConvId) break; // 대화 전환 시 오염 방지
             finalText += data.delta ?? "";
-            setStreamText(finalText);
+            // Human-in-the-Loop: <질문>...</질문> 마커가 완성되면 팝업 UI로 전환 (마지막 선택지는 직접입력)
+            const qm = finalText.match(/<질문>([\s\S]*?)<\/질문>/);
+            if (qm) {
+              const body = qm[1];
+              const q = body.match(/질문:\s*([^\n]+)/)?.[1]?.trim() ?? "추가 정보가 필요합니다.";
+              const options = body.split("\n")
+                .map(l => l.trim().replace(/^-\s*/, ""))
+                .filter(l => l && !l.startsWith("질문:") && !l.startsWith("</질문>"));
+              if (options.length >= 2 && !options.includes("직접입력")) options.push("직접입력");
+              setHitl({ question: q, options });
+              hitlRef.current = true;
+              // 마커를 제거한 질문 텍스트만 화면에 남긴다 (이후 델타는 무시)
+              setStreamText(finalText.replace(qm[0], "").trim());
+              setProgress(prev => [...prev, { phase: "thinking", detail: "추가 정보가 필요해 사용자에게 질문합니다" }]);
+              // 이후 스트림 이벤트는 무시하고 연결 종료만 기다린다
+              hitlWaiting = true;
+            }
+            if (!hitlWaiting) setStreamText(finalText);
           } else if (eventName === "citations") {
             setPendingCitations(data.chunks ?? []);
           } else if (eventName === "progress") {
@@ -372,8 +394,10 @@ export default function ChatPage() {
           } else if (eventName === "done") {
             if (activeIdRef.current !== targetConvId) break; // 대화 전환 시 오염 방지
             finalText = data.content ?? finalText;
+            finalText = finalText.replace(/<질문>[\s\S]*?<\/질문>\s*/g, "").trim(); // HITL 마커 제거
             setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
             setStreamText(""); setPendingCitations([]);
+            hitlRef.current = false; // 다음 질문 감지 허용
             // 완료 표시는 남기되 패널을 강제로 닫지 않는다 (사용자가 확장/확인 가능)
             setProgress(prev => [...prev, { phase: "done" }]);
             loadConvs();
@@ -388,6 +412,112 @@ export default function ChatPage() {
       setProgress(prev => [...prev, { phase: "done" }]);
     } finally {
       setStreaming(false);
+      hitlRef.current = false;
+    }
+  }
+
+  /** Human-in-the-Loop: 에이전트 질문에 대한 사용자 응답을 대화로 이어 보낸다 */
+  async function answerHitl(answer: string) {
+    if (!answer.trim() || streaming) return;
+    const q = hitl?.question ?? "";
+    setHitl(null); setHitlManual("");
+    // 사용자 선택지를 대화에 표시
+    setMsgs(prev => [...prev, { id: `h-${Date.now()}`, role: "user", content: answer.trim(), createdAt: new Date().toISOString() }]);
+    // 에이전트의 질문에 이어서 응답 전송 (질문 문맥은 히스토리에 있으므로 답만 전송)
+    await sendWithContext(`[추가 정보 답변] ${answer.trim()} (앞선 질문: ${q})`);
+  }
+
+  /** HITL 응답을 현재 대화에 이어 보낸다 (send의 내부 로직 재사용) */
+  async function sendWithContext(text: string) {
+    if (!text.trim()) return;
+    let convId = activeId;
+    if (!convId) {
+      const c = await makeConversation();
+      if (!c) return;
+      convId = c;
+    }
+    const targetConvId = convId;
+    setStreaming(true); setError(""); setStreamText(""); setPendingCitations([]);
+    setProgress([{ phase: "thinking", detail: "답변을 이어서 작성합니다" }]); setProgressOpen(true);
+    try {
+      const res = await fetch("/api/chat/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: convId, message: text, fileIds, thinkingLevel }),
+      });
+      setFileIds([]);
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "스트림 연결 실패");
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalText = "";
+      let hitlWaiting = false;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const ev of events) {
+          const [evLine, ...dataLines] = ev.split("\n");
+          if (!evLine.startsWith("event:")) continue;
+          const eventName = evLine.slice(6).trim();
+          const data = JSON.parse(dataLines.filter(l => l.startsWith("data:")).map(l => l.slice(5).trim()).join("\n") || "{}");
+          if (eventName === "text_delta") {
+            if (activeIdRef.current !== targetConvId) break;
+            finalText += data.delta ?? "";
+            const qm = finalText.match(/<질문>([\s\S]*?)<\/질문>/);
+            if (qm) {
+              const body = qm[1];
+              const q = body.match(/질문:\s*([^\n]+)/)?.[1]?.trim() ?? "추가 정보가 필요합니다.";
+              const options = body.split("\n").map(l => l.trim().replace(/^-\s*/, "")).filter(l => l && !l.startsWith("질문:") && !l.startsWith("</질문>"));
+              if (options.length >= 2 && !options.includes("직접입력")) options.push("직접입력");
+              setHitl({ question: q, options });
+              hitlRef.current = true;
+              setStreamText(finalText.replace(qm[0], "").trim());
+              setProgress(prev => [...prev, { phase: "thinking", detail: "추가 정보가 필요해 사용자에게 질문합니다" }]);
+              hitlWaiting = true;
+            }
+            if (!hitlWaiting) setStreamText(finalText);
+          } else if (eventName === "citations") {
+            setPendingCitations(data.chunks ?? []);
+          } else if (eventName === "progress") {
+            const p: Progress = data.phase === "tool"
+              ? { phase: "tool", toolName: data.toolName ?? "", args: data.args ?? undefined, detail: data.args ? undefined : `도구 실행: ${data.toolName}` }
+              : data.phase === "tool_done" ? { phase: "tool_done", toolName: data.toolName ?? "", ok: data.ok ?? true, args: data.args ?? undefined, detail: data.detail ?? undefined }
+              : data.phase === "done" ? { phase: "done" }
+              : { phase: "thinking", detail: data.detail ?? "생각하는 중입니다" };
+            setProgress(prev => {
+              if (p.phase === "thinking") {
+                const idx = prev.map(x => x.phase).lastIndexOf("thinking");
+                if (idx >= 0) { const copy = [...prev]; copy[idx] = p; return copy; }
+              }
+              return [...prev, p];
+            });
+          } else if (eventName === "done") {
+            if (activeIdRef.current !== targetConvId) break;
+            finalText = data.content ?? finalText;
+            finalText = finalText.replace(/<질문>[\s\S]*?<\/질문>\s*/g, "").trim(); // HITL 마커 제거
+            setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
+            setStreamText(""); setPendingCitations([]);
+            hitlRef.current = false;
+            setProgress(prev => [...prev, { phase: "done" }]);
+            loadConvs();
+          } else if (eventName === "error") {
+            throw new Error(data.error ?? "에이전트 오류");
+          }
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "요청 실패");
+      setStreamText("");
+      setProgress(prev => [...prev, { phase: "done" }]);
+    } finally {
+      setStreaming(false);
+      hitlRef.current = false;
     }
   }
 
@@ -856,6 +986,52 @@ export default function ChatPage() {
             <div ref={endRef} className="h-1" />
           </div>
         </div>
+
+        {/* ── Human-in-the-Loop 질문 팝업 ── */}
+        {hitl && (
+          <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+            <div className="pointer-events-auto w-full max-w-lg overflow-hidden rounded-2xl border border-line-strong bg-surface shadow-2xl" role="dialog" aria-modal="true" aria-label="추가 정보 요청">
+              <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent-soft font-serif text-xs font-semibold text-accent">{persona.mono}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-tight text-ink">부서장이 추가 정보가 필요합니다</p>
+                  <p className="font-mono text-[10px] text-ink-faint">답변을 선택하거나 직접 입력해 주세요</p>
+                </div>
+                <button onClick={() => { setHitl(null); setHitlManual(""); }} title="닫기" className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-sm font-medium leading-relaxed text-ink">{hitl.question}</p>
+                <div className="mt-3 grid gap-1.5">
+                  {hitl.options.map((opt, i) => (
+                    <button key={i} onClick={() => void answerHitl(opt)}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm transition-colors ${opt === "직접입력"
+                        ? "border-dashed border-line-strong bg-canvas text-ink-soft hover:border-accent hover:text-accent"
+                        : "border-line bg-canvas text-ink hover:border-accent hover:bg-accent-soft"}`}>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                {/* 직접입력 칸 (항상 제공) */}
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    value={hitlManual}
+                    onChange={e => setHitlManual(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") void answerHitl(hitlManual); }}
+                    placeholder="직접입력…"
+                    className="min-w-0 flex-1 rounded-lg border border-line bg-canvas px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-faint focus:border-accent"
+                  />
+                  <button onClick={() => void answerHitl(hitlManual)}
+                    disabled={!hitlManual.trim()}
+                    className="flex h-9 shrink-0 items-center justify-center rounded-lg bg-ink px-3 text-sm font-medium text-white transition-colors hover:bg-[#33312E] disabled:opacity-35">
+                    보내기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── 입력 (요구 5·6·7·8) ── */}
         <div className="border-t border-line bg-surface px-4 py-4">
