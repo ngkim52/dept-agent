@@ -818,9 +818,9 @@ export default function ChatPage() {
                       // 단계 라벨 — 한국어로 명확히. thinking은 raw 추론이 아니라 작업 단계로 표시.
                       let label: string; let stepLabel: string;
                       if (p.phase === "thinking") {
-                        stepLabel = "검토";
+                        stepLabel = "추론";
                         label = p.detail && p.detail.trim().length > 0
-                          ? "부서장이 답변을 검토 중 · 추론 상세보기를 펼치세요"
+                          ? "검토 중 · 추론 내용을 표시합니다"
                           : "부서장이 질문을 분석하고 있습니다";
                       } else if (p.phase === "tool") {
                         stepLabel = "도구 실행";
@@ -841,7 +841,8 @@ export default function ChatPage() {
                       }
                       const hasDetail = p.phase === "thinking" ? (p.detail != null && p.detail.trim().length > 0)
                         : (p.args !== undefined && p.args !== null && JSON.stringify(p.args) !== "{}");
-                      const isOpen = expandedIdx === i;
+                      // thinking(추론)은 상세가 있으면 항상 펼쳐서 보여주고, 도구 항목은 클릭으로 토글
+                      const isOpen = p.phase === "thinking" ? hasDetail : expandedIdx === i;
                       return (
                         <div key={i} className="flex flex-col gap-1">
                           <div className="flex items-center gap-2 text-xs">
@@ -872,7 +873,7 @@ export default function ChatPage() {
                             p.phase === "thinking" ? (
                               <div className="rounded-lg border border-line bg-canvas px-3 py-2">
                                 <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-ink-faint">추론 (reasoning)</p>
-                                <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ink-soft">{p.detail}</pre>
+                                <pre className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-ink-soft">{p.detail}</pre>
                               </div>
                             ) : p.phase === "tool" || p.phase === "tool_done" ? (
                               <div className="rounded-lg border border-line bg-canvas px-3 py-2">

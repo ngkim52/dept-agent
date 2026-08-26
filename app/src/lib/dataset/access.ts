@@ -14,15 +14,30 @@ export async function getDepartmentDatasets(departmentId: string): Promise<strin
 }
 
 // 부서에 연결된 RAGFlow 데이터셋 (id + 이름) 반환 — 진행표시/로깅용
+// DB에 datasetName이 없어도 RAGFlow 실제 데이터셋 이름을 조회해 채운다 (해시 id 노출 방지).
 export async function getDepartmentDatasetInfos(departmentId: string): Promise<{ id: string; name: string }[]> {
   if (!departmentId) return [];
   const rows = await db.query.departmentDatasets.findMany({
     where: (t, { eq }) => eq(t.departmentId, departmentId),
   });
-  if (rows.length) return rows.map(r => ({ id: r.datasetId, name: r.datasetName || r.datasetId }));
-  const dept = await db.query.departments.findFirst({ where: eq(schema.departments.id, departmentId) });
-  if (!dept?.ragflowDatasetId) return [];
-  return [{ id: dept.ragflowDatasetId, name: dept.name }];
+  let out: { id: string; name: string }[];
+  if (rows.length) {
+    out = rows.map(r => ({ id: r.datasetId, name: r.datasetName || r.datasetId }));
+  } else {
+    const dept = await db.query.departments.findFirst({ where: eq(schema.departments.id, departmentId) });
+    if (!dept?.ragflowDatasetId) return [];
+    out = [{ id: dept.ragflowDatasetId, name: dept.name }];
+  }
+  // RAGFlow 실제 이름으로 보강 (비용 최소화 위해 실패 시 기존 이름 폴백)
+  try {
+    const { ragflow } = await import("@/lib/ragflow/client");
+    const dsList = await ragflow.listDatasets();
+    const nameById = new Map((dsList ?? []).map(d => [String(d.id), d.name]));
+    out = out.map(o => ({ id: o.id, name: nameById.get(String(o.id)) || o.name }));
+  } catch (e) {
+    console.error("데이터셋 이름 보강 실패:", e);
+  }
+  return out;
 }
 
 export async function setDepartmentDatasets(departmentId: string, datasetIds: string[]): Promise<void> {
