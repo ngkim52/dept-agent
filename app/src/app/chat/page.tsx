@@ -341,6 +341,7 @@ export default function ChatPage() {
       let buffer = "";
       let finalText = "";
       let hitlWaiting = false;
+      let localCitations: Citation[] = []; // 이벤트 루프 내 로컬 누적 — React 상태 stale 문제 방지
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -374,7 +375,8 @@ export default function ChatPage() {
             }
             if (!hitlWaiting) setStreamText(finalText);
           } else if (eventName === "citations") {
-            setPendingCitations(data.chunks ?? []);
+            localCitations = data.chunks ?? [];
+            setPendingCitations(localCitations); // 스트리밍 중 표시용
           } else if (eventName === "progress") {
             // 진행 상황 (thinking/tool) — args까지 보존해 확장 시 상세 표시. 완료(done) 후에도 패널은 남긴다.
             const p: Progress = data.phase === "tool"
@@ -395,7 +397,7 @@ export default function ChatPage() {
             if (activeIdRef.current !== targetConvId) break; // 대화 전환 시 오염 방지
             finalText = data.content ?? finalText;
             finalText = finalText.replace(/<질문>[\s\S]*?<\/질문>\s*/g, "").trim(); // HITL 마커 제거
-            setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
+            setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: localCitations, createdAt: new Date().toISOString() }]);
             setStreamText(""); setPendingCitations([]);
             hitlRef.current = false; // 다음 질문 감지 허용
             // 완료 표시는 남기되 패널을 강제로 닫지 않는다 (사용자가 확장/확인 가능)
@@ -455,6 +457,7 @@ export default function ChatPage() {
       let buffer = "";
       let finalText = "";
       let hitlWaiting = false;
+      let localCitations: Citation[] = []; // React 상태 stale 방지 (로컬 누적)
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -483,7 +486,8 @@ export default function ChatPage() {
             }
             if (!hitlWaiting) setStreamText(finalText);
           } else if (eventName === "citations") {
-            setPendingCitations(data.chunks ?? []);
+            localCitations = data.chunks ?? [];
+            setPendingCitations(localCitations); // 스트리밍 중 표시용
           } else if (eventName === "progress") {
             const p: Progress = data.phase === "tool"
               ? { phase: "tool", toolName: data.toolName ?? "", args: data.args ?? undefined, detail: data.args ? undefined : `도구 실행: ${data.toolName}` }
@@ -501,7 +505,7 @@ export default function ChatPage() {
             if (activeIdRef.current !== targetConvId) break;
             finalText = data.content ?? finalText;
             finalText = finalText.replace(/<질문>[\s\S]*?<\/질문>\s*/g, "").trim(); // HITL 마커 제거
-            setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: pendingCitations, createdAt: new Date().toISOString() }]);
+            setMsgs(prev => [...prev, { id: data.messageId, role: "assistant", content: finalText, citations: localCitations, createdAt: new Date().toISOString() }]);
             setStreamText(""); setPendingCitations([]);
             hitlRef.current = false;
             setProgress(prev => [...prev, { phase: "done" }]);
