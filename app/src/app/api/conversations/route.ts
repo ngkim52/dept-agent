@@ -20,10 +20,13 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireUser(req);
     const body = await req.json().catch(() => ({}));
-    // 일반 사용자는 가입 부서를 자동 사용, 관리자는 로그인 시 선택한 부서를 명시적으로 사용
+    // 보안(P2-B6): 비관리자는 반드시 서버의 user.departmentId를 사용. null이면 차단.
     const departmentId = user.role === "admin"
       ? String(body.departmentId ?? "")
-      : (user.departmentId ?? String(body.departmentId ?? ""));
+      : user.departmentId;
+    if (user.role !== "admin" && !departmentId) {
+      return Response.json({ error: "부서 정보가 없습니다. 관리자에게 문의하세요." }, { status: 400 });
+    }
     if (!departmentId) return Response.json({ error: "부서가 필요합니다." }, { status: 400 });
     const title = String(body.title ?? "새 대화");
     const conv = { id: randomUUID(), userId: user.id, departmentId, title, createdAt: new Date() };

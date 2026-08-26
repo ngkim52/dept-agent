@@ -45,7 +45,10 @@ export const sessions = sqliteTable("sessions", {
   userId: text("user_id").notNull().references(() => users.id),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+}, (t) => ({
+  userIdx: index("sessions_user_idx").on(t.userId),
+  expiresIdx: index("sessions_expires_idx").on(t.expiresAt),
+}));
 
 export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
@@ -53,7 +56,9 @@ export const conversations = sqliteTable("conversations", {
   departmentId: text("department_id").references(() => departments.id),
   title: text("title"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+}, (t) => ({
+  userIdx: index("conversations_user_idx").on(t.userId),
+}));
 
 export const messages = sqliteTable("messages", {
   id: text("id").primaryKey(),
@@ -64,7 +69,9 @@ export const messages = sqliteTable("messages", {
   content: text("content").notNull(),
   citations: text("citations"), // JSON 문자열 (참조 근거)
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+}, (t) => ({
+  convIdx: index("messages_conversation_idx").on(t.conversationId),
+}));
 
 export const documents = sqliteTable("documents", {
   id: text("id").primaryKey(),
@@ -79,7 +86,9 @@ export const documents = sqliteTable("documents", {
     .notNull()
     .default("done"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
-});
+}, (t) => ({
+  userIdx: index("documents_user_idx").on(t.userId),
+}));
 
 export type Department = typeof departments.$inferSelect;
 export type AppSetting = typeof appSettings.$inferSelect;

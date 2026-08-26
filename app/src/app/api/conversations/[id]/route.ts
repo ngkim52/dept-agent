@@ -20,8 +20,11 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params;
     const conv = await db.query.conversations.findFirst({ where: and(eq(schema.conversations.id, id), eq(schema.conversations.userId, user.id)) });
     if (!conv) throw new HttpError(404, "대화가 없습니다.");
-    await db.delete(schema.messages).where(eq(schema.messages.conversationId, conv.id));
-    await db.delete(schema.conversations).where(eq(schema.conversations.id, conv.id));
+    // 보안(P2-B15): 메시지+대화 삭제를 트랜잭션으로 — 고아 메시지 방지
+    await db.transaction(async (tx) => {
+      await tx.delete(schema.messages).where(eq(schema.messages.conversationId, conv.id));
+      await tx.delete(schema.conversations).where(eq(schema.conversations.id, conv.id));
+    });
     return Response.json({ ok: true });
   } catch (e) { return jsonError(e); }
 }

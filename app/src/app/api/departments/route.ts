@@ -8,6 +8,8 @@ import { jsonError } from "@/lib/auth/http";
 export async function GET(req: NextRequest) {
   try {
     const deps = await db.query.departments.findMany({ where: eq(schema.departments.isActive, true) });
-    return Response.json({ departments: deps });
+    // 보안(P2-B28): 공개 API에서는 내부 필드(ragflowDatasetId, personaKey 등) 제외
+    const publicDeps = deps.map(({ id, name }) => ({ id, name }));
+    return Response.json({ departments: publicDeps });
   } catch (e) { return jsonError(e); }
 }

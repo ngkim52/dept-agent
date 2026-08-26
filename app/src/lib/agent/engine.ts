@@ -359,6 +359,12 @@ export async function runPersonaAgent(
   const uploadFiles = opts.uploadFiles ?? [];
   const transformContext: AgentOptions["transformContext"] | undefined = hasResults || uploadFiles.length > 0
     ? async (messages) => {
+        // 성능(P2-E4): 이미 RAG 컨텍스트가 주입된 턴에는 중복 주입하지 않음
+        const alreadyInjected = messages.some((m) => 
+          typeof m === "object" && m !== null && "content" in m && 
+          typeof m.content === "string" && m.content.includes("<<<RAG_CONTEXT>>>")
+        );
+        if (alreadyInjected) return messages;
         const parts: string[] = [];
         if (ragChunks.length) parts.push(`[업무 자료/검색 결과]\n${ragBlock}`);
         if (uploadFiles.length) {
