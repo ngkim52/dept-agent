@@ -30,6 +30,25 @@ function personaOf(departmentId?: string | null) {
 }
 
 /* ---- 아주 작은 마크다운 렌더러 (HTML 이스케이프 후 태그 삽입) ---- */
+/** RAGFlow 청크는 raw HTML(테이블 등)로 오기도 함. HTML을 Markdown 테이블로 정리한 후 Markdown 렌더러에 넘긴다. */
+function chunkToMarkdown(raw: string): string {
+  let s = raw.trim();
+  // 표/행 종료 태그 → 줄바꿈
+  s = s.replace(/<br\s*\/?>/gi, "\n")
+       .replace(/<\/tr>/gi, "\n")
+       .replace(/<\/p>|<\/li>|<\/div>/gi, "\n")
+       .replace(/<\/table>|<\/thead>|<\/tbody>/gi, "\n\n")
+       .replace(/<\/th>|<\/td>/gi, " | ");
+  // 열기 태그 → 마크다운 左단위
+  s = s.replace(/<table[^>]*>/gi, "").replace(/<thead[^>]*>|<tbody[^>]*>/gi, "")
+       .replace(/<tr[^>]*>/gi, "").replace(/<th[^>]*>/gi, "| ").replace(/<td[^>]*>/gi, "| ");
+  s = s.replace(/<[^>]+>/g, ""); // 남은 태그 제거
+  s = s.replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<")
+       .replace(/&gt;/g, ">").replace(/&quot;/g, "\"");
+  s = s.replace(/\s*\|\s*\|+/g, " | ").replace(/\n{3,}/g, "\n\n");
+  return s;
+}
+
 function esc(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -952,7 +971,9 @@ export default function ChatPage() {
                                   {c.content && (
                                     <details className="mt-0.5 ml-4 rounded-md bg-canvas px-2.5 py-1">
                                       <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink">{isWeb ? "웹 요약 보기" : "청크 보기"}</summary>
-                                      <p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-ink-soft">{c.content}</p>
+                                      <div className="mt-1 text-[11px] leading-relaxed text-ink-soft">
+                                        <Markdown text={chunkToMarkdown(c.content)} />
+                                      </div>
                                     </details>
                                   )}
                                 </li>
