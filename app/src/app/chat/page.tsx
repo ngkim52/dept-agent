@@ -778,6 +778,7 @@ export default function ChatPage() {
       )}
 
       {/* ── 본문 ── */}
+      <div className="flex min-w-0 flex-1">
       <main className="flex min-w-0 flex-1 flex-col">
         {/* 스레드 헤더 */}
         <header className="flex items-center gap-3 border-b border-line bg-surface/70 px-6 py-3 backdrop-blur">
@@ -958,41 +959,6 @@ export default function ChatPage() {
                     </div>
                     <div className="rounded-xl rounded-tl-sm border border-line border-l-[3px] border-l-accent bg-surface px-4 py-3 text-sm text-ink">
                       <Markdown text={m.content} />
-                      {m.citations && m.citations.length > 0 && (
-                        <div className="mt-3 border-t border-line pt-2.5">
-                          <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료 · {m.citations.length}</p>
-                          <ul className="mt-1.5 space-y-1">
-                            {m.citations.map((c, i) => {
-                              const isWeb = c.type === "web" || !!c.url;
-                              return (
-                                <li key={i} className="group text-xs text-ink-soft">
-                                  <div className="flex items-center gap-2 rounded-md bg-canvas px-2.5 py-1.5">
-                                    <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${isWeb ? "bg-accent-soft" : "bg-accent"}`} />
-                                    <span className="truncate">{c.source || "출처 알 수 없음"}</span>
-                                    {isWeb ? (
-                                      <a href={c.url} target="_blank" rel="noreferrer"
-                                        className="ml-auto shrink-0 inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-accent hover:underline">
-                                        링크
-                                        <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" /></svg>
-                                      </a>
-                                    ) : (
-                                      c.similarity ? <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-faint">{Math.round(c.similarity * 100)}%</span> : null
-                                    )}
-                                  </div>
-                                  {c.content && (
-                                    <details className="mt-0.5 ml-4 rounded-md bg-canvas px-2.5 py-1">
-                                      <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink">{isWeb ? "웹 요약 보기" : "청크 보기"}</summary>
-                                      <div className="mt-1 text-[11px] leading-relaxed text-ink-soft">
-                                        <Markdown text={chunkToMarkdown(c.content)} />
-                                      </div>
-                                    </details>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1186,6 +1152,53 @@ export default function ChatPage() {
           </div>
         </div>
       </main>
+
+        {/* ── 오른쪽 참고자료 패널 ── */}
+        <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-surface">
+          <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료</p>
+            <span className="font-mono text-[10px] text-ink-faint">마지막 답변 기준</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+            {(() => {
+              const lastMsg = [...msgs].reverse().find(m => m.role === "assistant");
+              const cits = lastMsg?.citations ?? [];
+              if (!cits.length) {
+                return <p className="px-1 text-xs text-ink-faint">아직 참고한 자료가 없습니다.</p>;
+              }
+              return cits.map((c, i) => {
+                const isWeb = c.type === "web" || !!c.url;
+                return (
+                  <div key={i} className="rounded-lg border border-line bg-canvas px-3 py-2.5">
+                    <div className="flex items-start gap-2">
+                      <span className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${isWeb ? "bg-accent-soft" : "bg-accent"}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-ink">{c.source || "출처 알 수 없음"}</p>
+                        {isWeb && c.url ? (
+                          <a href={c.url} target="_blank" rel="noreferrer"
+                            className="mt-0.5 block truncate break-all font-mono text-[10px] text-accent hover:underline">
+                            {c.url}
+                          </a>
+                        ) : c.similarity ? (
+                          <p className="mt-0.5 font-mono text-[10px] text-ink-faint">유사도 {Math.round(c.similarity * 100)}%</p>
+                        ) : null}
+                        {c.content && (
+                          <details className="mt-1.5 rounded-md bg-canvas px-2 py-1">
+                            <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink">{isWeb ? "웹 요약 보기" : "청크 보기"}</summary>
+                            <div className="mt-1 text-[11px] leading-relaxed text-ink-soft">
+                              <Markdown text={chunkToMarkdown(c.content)} />
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
