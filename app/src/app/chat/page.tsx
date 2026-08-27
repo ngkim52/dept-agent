@@ -187,6 +187,8 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [progress, setProgress] = useState<Progress[]>([]);
   const [progressOpen, setProgressOpen] = useState(true);
+  const [refOpen, setRefOpen] = useState(true); // 참고자료 패널 펼침/접기
+  const [refMsgId, setRefMsgId] = useState<string | null>(null); // 클릭해 선택한 답변(메시지)의 참고자료
   const [expandedIdx, setExpandedIdx] = useState(-1);
   const [thinkingLevel, setThinkingLevel] = useState<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max">("high");
   const [slashOpen, setSlashOpen] = useState(false);
@@ -956,8 +958,24 @@ export default function ChatPage() {
                     <div className="mb-1 flex items-baseline gap-2 px-1">
                       <span className="text-xs font-semibold text-ink">{persona.name}</span>
                       <span className="font-mono text-[11px] text-ink-faint">{fmtTime(m.createdAt)}</span>
+                      {m.citations && m.citations.length > 0 && (
+                        <button
+                          onClick={() => { setRefOpen(true); setRefMsgId(m.id); }}
+                          className={`ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+                            refMsgId === m.id ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-faint hover:border-accent hover:text-accent"
+                          }`}
+                          title="이 답변의 참고자료 보기"
+                        >
+                          참고 {m.citations.length}
+                        </button>
+                      )}
                     </div>
-                    <div className="rounded-xl rounded-tl-sm border border-line border-l-[3px] border-l-accent bg-surface px-4 py-3 text-sm text-ink">
+                    <div
+                      onClick={() => { if (m.citations && m.citations.length > 0) { setRefOpen(true); setRefMsgId(m.id); } }}
+                      className={`rounded-xl rounded-tl-sm cursor-pointer border border-line border-l-[3px] border-l-accent bg-surface px-4 py-3 text-sm text-ink transition-colors ${
+                        refMsgId === m.id ? "ring-1 ring-accent/60" : ""
+                      } hover:border-accent/50`}
+                    >
                       <Markdown text={m.content} />
                     </div>
                   </div>
@@ -1153,51 +1171,75 @@ export default function ChatPage() {
         </div>
       </main>
 
-        {/* ── 오른쪽 참고자료 패널 ── */}
+        {/* ── 오른쪽 참고자료 패널 (접기 가능) ── */}
+        {refOpen ? (
         <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-surface">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료</p>
-            <span className="font-mono text-[10px] text-ink-faint">마지막 답변 기준</span>
+            <div className="flex items-center gap-1">
+              <span className="font-mono text-[10px] text-ink-faint">{refMsgId ? "선택 답변" : "마지막 답변"}</span>
+              <button onClick={() => setRefOpen(false)} title="패널 접기"
+                className="flex h-6 w-6 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+              </button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
             {(() => {
-              const lastMsg = [...msgs].reverse().find(m => m.role === "assistant");
-              const cits = lastMsg?.citations ?? [];
-              if (!cits.length) {
-                return <p className="px-1 text-xs text-ink-faint">아직 참고한 자료가 없습니다.</p>;
-              }
-              return cits.map((c, i) => {
-                const isWeb = c.type === "web" || !!c.url;
-                return (
-                  <div key={i} className="rounded-lg border border-line bg-canvas px-3 py-2.5">
-                    <div className="flex items-start gap-2">
-                      <span className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${isWeb ? "bg-accent-soft" : "bg-accent"}`} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-ink">{c.source || "출처 알 수 없음"}</p>
-                        {isWeb && c.url ? (
-                          <a href={c.url} target="_blank" rel="noreferrer"
-                            className="mt-0.5 block truncate break-all font-mono text-[10px] text-accent hover:underline">
-                            {c.url}
-                          </a>
-                        ) : c.similarity ? (
-                          <p className="mt-0.5 font-mono text-[10px] text-ink-faint">유사도 {Math.round(c.similarity * 100)}%</p>
-                        ) : null}
-                        {c.content && (
-                          <details className="mt-1.5 rounded-md bg-canvas px-2 py-1">
-                            <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink">{isWeb ? "웹 요약 보기" : "청크 보기"}</summary>
-                            <div className="mt-1 text-[11px] leading-relaxed text-ink-soft">
-                              <Markdown text={chunkToMarkdown(c.content)} />
-                            </div>
-                          </details>
-                        )}
+              const sel = refMsgId ? msgs.find(m => m.id === refMsgId) : null;
+              const target = sel ?? [...msgs].reverse().find(m => m.role === "assistant");
+              const cits = target?.citations ?? [];
+              if (refMsgId && !sel) return <p className="px-1 text-xs text-ink-faint">준비된 답변의 참고자료입니다.</p>;
+              if (!cits.length) return <p className="px-1 text-xs text-ink-faint">이 답변에는 참고한 자료가 없습니다.</p>;
+              return (
+                <>
+                  {refMsgId && target && (
+                    <p className="px-1 text-[10px] text-ink-faint">응답 "…{target.content.slice(0, 40)}…"</p>
+                  )}
+                  {cits.map((c, i) => {
+                    const isWeb = c.type === "web" || !!c.url;
+                    return (
+                      <div key={i} className="rounded-lg border border-line bg-canvas px-3 py-2.5">
+                        <div className="flex items-start gap-2">
+                          <span className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${isWeb ? "bg-accent-soft" : "bg-accent"}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-ink">{c.source || "출처 알 수 없음"}</p>
+                            {isWeb && c.url ? (
+                              <a href={c.url} target="_blank" rel="noreferrer"
+                                className="mt-0.5 block break-all font-mono text-[10px] text-accent hover:underline">
+                                {c.url}
+                              </a>
+                            ) : c.similarity ? (
+                              <p className="mt-0.5 font-mono text-[10px] text-ink-faint">유사도 {Math.round(c.similarity * 100)}%</p>
+                            ) : null}
+                            {c.content && (
+                              <details className="mt-1.5 rounded-md bg-canvas px-2 py-1">
+                                <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink">{isWeb ? "웹 요약 보기" : "청크 보기"}</summary>
+                                <div className="mt-1 text-[11px] leading-relaxed text-ink-soft">
+                                  <Markdown text={chunkToMarkdown(c.content)} />
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              });
+                    );
+                  })}
+                </>
+              );
             })()}
           </div>
         </aside>
+        ) : (
+        /* 접힌 참고자료 레일 */
+        <aside className="flex w-11 shrink-0 flex-col items-center border-l border-line bg-surface py-3">
+          <button onClick={() => setRefOpen(true)} title="참고자료 펼치기"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-canvas hover:text-accent">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM9 5v14" /><path d="M15 10l2 2-2 2" /></svg>
+          </button>
+          <span className="mt-1 text-center font-mono text-[9px] text-ink-faint">자료</span>
+        </aside>
+        )}
       </div>
     </div>
   );
