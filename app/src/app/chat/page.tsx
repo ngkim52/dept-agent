@@ -642,10 +642,14 @@ export default function ChatPage() {
     "준비금 산출 가정(이율·해지율) 검증안을 검토해 주세요",
     "신상품 요율 산출 시 리스크를 짚어 주세요",
     "재무건전성(RBC) 분석 방안을 제안해 주세요",
+    "영업보험료·준비금 적립 방식 변경 영향 검토를 제안해 주세요",
+    "최근 유사 사업·준비금 추정치 비교분석을 검토해 주세요",
   ] : [
-    "보험금 심사 프로세스 개선안 초안을 검토해 주세요",
+    "지급보험금 손해율이 계획 대비 5% 넘어 원인 분석 방법을 제안해 주세요",
     "AI 자동 심사 도입 시 리스크를 짚어 주세요",
-    "심사 지연 사유 분석 방안을 제안해 주세요",
+    "지급보험금 품질 점검 샘플링(13%) 기준 항목 검토를 제안해 주세요",
+    "청구 자동심사(300만원 이하) 대상 확대 여부 점검을 검토해 주세요",
+    "신상품 보험금 리스크(역선택·손해율) 사전 검토안을 검토해 주세요",
   ];
 
   return (
@@ -805,10 +809,17 @@ export default function ChatPage() {
                   무슨 일을 검토받고 싶으신가요?
                 </h2>
                 <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-                  작성한 자료나 계획을 첨부 없이도 업무 질문만으로 부서장의 의견을 받을 수 있습니다.
-                  내부 기준 자료가 필요하면 안내해 드립니다.
+                  작성한 자료나 계획을 첨부 없이도 업무 질문만으로 {persona.name}의 의견을 받을 수 있습니다.
+                  업무 판단이 필요하면 내부 자료(RAG)·웹 검색·데이터 분석을 활용해 근거를 제공하고, 생각(reasoning) 과정도 보여드립니다.
                 </p>
-                <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 rounded-lg border border-line bg-surface px-4 py-3 text-[11px] leading-relaxed text-ink-soft">
+                  <span className="inline-flex items-center gap-1.5"><b className="text-ink">슬래시 명령 /</b> 스킬·새 대화·생각 수준</span>
+                  <span className="inline-flex items-center gap-1.5"><b className="text-ink">@ 파일</b> 내 자료 첨부</span>
+                  <span className="inline-flex items-center gap-1.5"><b className="text-ink">Drag&amp;Drop</b> 파일 업로드</span>
+                  <span className="inline-flex items-center gap-1.5"><b className="text-ink">진행 패널</b> 도구·추론 과정 확인</span>
+                </div>
+                <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.12em] text-ink-faint">아래 질문 예시로 시작해 보세요</p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
                   {examples.map((ex) => (
                     <button key={ex} onClick={() => send(ex)}
                       className="lift flex w-full items-center justify-between gap-3 rounded-lg border border-line bg-surface px-4 py-3 text-left text-sm text-ink-soft transition-colors hover:bg-accent-soft hover:text-accent">
