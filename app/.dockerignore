@@ -3,7 +3,6 @@ node_modules
 data
 .env
 .env.*
-drizzle
 *.tsbuildinfo
 .dockerignore
 Dockerfile

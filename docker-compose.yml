@@ -1,6 +1,9 @@
-# 부서장 페르소나 에이전트 — 로컬 Docker 실행 예시
-# 사전 준비: app/.env 에 LLM/RAGFlow 설정 후
-#   docker compose up -d --build
+# 부서장 페르소나 에이전트 — Docker 실행
+# 사전 준비:
+#   1) cp app/.env.example .env  (또는 app/.env 복사)
+#   2) .env에 RAGFLOW_API_KEY / LLM_API_KEY / OPENROUTER_API_KEY(웹검색) 설정
+#   3) docker compose up -d --build
+# 관리자 계정: ADMIN_EMAIL/ADMIN_PASSWORD 환경변수로 seed
 services:
   dept-agent:
     build:
@@ -8,16 +11,24 @@ services:
     container_name: dept-agent
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - DATA_DIR=/app/data
+      - PYTHON_BIN=/usr/bin/python3
       - LLM_BASE_URL=${LLM_BASE_URL:-https://litellm.ax-demo.com/v1}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-deepseek-v4-flash}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - RAGFLOW_BASE_URL=${RAGFLOW_BASE_URL:-https://ragflow.ax-demo.com}
       - RAGFLOW_API_KEY=${RAGFLOW_API_KEY}
+      - RAG_TOP_K=${RAG_TOP_K:-10}
+      - RAG_SIMILARITY_THRESHOLD=${RAG_SIMILARITY_THRESHOLD:-0.2}
       - ALLOWED_EMAIL_DOMAINS=${ALLOWED_EMAIL_DOMAINS:-shinhan.com,shinhanlife.co.kr}
       - SESSION_COOKIE_NAME=dept_session
-      - COOKIE_SECURE=false
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     volumes:
       - dept-agent-data:/app/data
     restart: unless-stopped
