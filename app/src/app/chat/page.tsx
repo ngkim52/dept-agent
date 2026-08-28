@@ -672,14 +672,15 @@ export default function ChatPage() {
       )}
 
       {!sidebarOpen && (
-      <aside className="flex w-20 shrink-0 flex-col items-center border-r border-line bg-surface py-5">
-        {/* 상단 — 신한라이프 마크 */}
+      <aside className="flex shrink-0 flex-col items-center border-b border-line bg-surface py-1.5 md:w-20 md:border-r md:py-5 md:border-b-0">
+        {/* 상단 — 신한라이프 마크 (모바일: 상단바, 데스크톱: 세로 레일) */}
+        <div className="flex w-full items-center justify-around md:flex-col md:justify-start md:gap-0">
         <button onClick={() => setSidebarOpen(true)} title="신한라이프"
-          className="flex h-14 w-14 items-center justify-center rounded-lg transition-colors hover:bg-canvas">
-          <img src="/shinhan-life-mark.png" alt="신한라이프" className="h-12 w-12 object-contain" />
+          className="flex h-11 w-11 items-center justify-center rounded-lg transition-colors hover:bg-canvas md:h-14 md:w-14">
+          <img src="/shinhan-life-mark.png" alt="신한라이프" className="h-9 w-9 object-contain md:h-12 md:w-12" />
         </button>
-        {/* 로고 바로 아래 — 빠른 아이콘 */}
-        <div className="mt-7 flex flex-col items-center gap-1.5">
+        {/* 빠른 아이콘 (모바일: 가로, 데스크톱: 세로) */}
+        <div className="flex flex-row items-center gap-1.5 md:mt-7 md:flex-col md:gap-1.5">
           <button onClick={() => setSidebarOpen(true)} title="사이드바 열기"
             className="flex h-10 w-10 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink">
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
@@ -693,12 +694,29 @@ export default function ChatPage() {
             {I.folder}
           </button>
         </div>
+        </div>
       </aside>
       )}
 
       {/* ── 사이드바 ── */}
       {sidebarOpen && (
-      <aside className="flex w-72 shrink-0 flex-col border-r border-line bg-surface">
+      <>
+        {/* 모바일 전용: 배경 오버레이 (드로어 바깥 클릭 시 닫기) */}
+        <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setSidebarOpen(false)} />
+        <aside className="fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shrink-0 flex-col bg-surface shadow-2xl md:static md:z-auto md:h-auto md:max-w-none md:border-r md:border-line md:shadow-none">
+        <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-4">
+          <img src="/shinhan-life-logo.png" alt="신한라이프" className="h-7 w-auto max-w-[160px] object-contain" />
+          <div className="flex shrink-0 items-center gap-1">
+            <button onClick={logout} title="로그아웃"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+              {I.logout}
+            </button>
+            <button onClick={() => setSidebarOpen(false)} title="사이드바 축소"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM9 5v14" /></svg>
+            </button>
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-4">
           <img src="/shinhan-life-logo.png" alt="신한라이프" className="h-7 w-auto max-w-[160px] object-contain" />
           <div className="flex shrink-0 items-center gap-1">
@@ -777,27 +795,34 @@ export default function ChatPage() {
           <p className="font-mono text-[11px] text-ink-faint">{user?.role === "admin" ? "관리자" : "구성원"}</p>
         </div>
       </aside>
+      </>
       )}
 
       {/* ── 본문 ── */}
       <div className="flex min-w-0 flex-1">
       <main className="flex min-w-0 flex-1 flex-col">
         {/* 스레드 헤더 */}
-        <header className="flex items-center gap-3 border-b border-line bg-surface/70 px-6 py-3 backdrop-blur">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent-soft font-serif text-sm font-semibold text-accent">
+        <header className="flex items-center gap-3 border-b border-line bg-surface/70 px-3 py-3 backdrop-blur md:px-6">
+          <button onClick={() => setSidebarOpen(true)} title="대화 목록"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-ink md:hidden">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent-soft font-serif text-sm font-semibold text-accent">
             {persona.mono}
           </span>
-          <div>
-            <p className="text-sm font-semibold text-ink">{persona.name}</p>
-            <p className="text-[11px] text-ink-faint">업무 시 미리 검증, 조언 받기, 결정 프로세스를 경험해보세요!</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink">{persona.name}</p>
+            <p className="hidden text-[11px] text-ink-faint md:block">업무 시 미리 검증, 조언 받기, 결정 프로세스를 경험해보세요!</p>
           </div>
-          <span className="ml-auto flex items-center gap-1.5 rounded-md bg-pale-green px-2 py-1 font-mono text-[11px] text-pale-green-text">
+          <span className="ml-auto hidden items-center gap-1.5 rounded-md bg-pale-green px-2 py-1 font-mono text-[11px] text-pale-green-text md:flex">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-pale-green-text" /> 자료 근거 기반
           </span>
-          <span className="flex items-center gap-1.5 rounded-md bg-accent-soft px-2 py-1 font-mono text-[11px] text-accent">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" /> 업무 스킬 · 자동 압축
-          </span>
-          <span className="flex items-center gap-1.5 rounded-md bg-canvas px-2 py-1 font-mono text-[11px] text-ink-soft">
+          <button onClick={() => setRefOpen(true)} title="참고자료"
+            className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-soft transition-colors hover:bg-canvas hover:text-accent md:ml-0">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><path d="M16 12l3-3 3 3"/></svg>
+            <span className="ml-1 hidden font-mono text-[10px] md:inline">참고</span>
+          </button>
+          <span className="hidden items-center gap-1.5 rounded-md bg-canvas px-2 py-1 font-mono text-[11px] text-ink-soft md:flex">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent" /> 생각 · {thinkingLevel}
           </span>
         </header>
@@ -1055,7 +1080,7 @@ export default function ChatPage() {
         )}
 
         {/* ── 입력 (요구 5·6·7·8) ── */}
-        <div className="border-t border-line bg-surface px-4 py-4">
+        <div className="border-t border-line bg-surface px-3 py-3 md:px-4 md:py-4">
           <div className="relative mx-auto max-w-7xl">
             {/* 요구 3: "@" 내 자료 팔레트 */}
             {mentionOpen && myDocs.filter(d => d.filename.toLowerCase().includes(mentionQuery.toLowerCase())).length > 0 && (
@@ -1173,7 +1198,10 @@ export default function ChatPage() {
 
         {/* ── 오른쪽 참고자료 패널 (접기 가능) ── */}
         {refOpen ? (
-        <aside className="flex w-80 shrink-0 flex-col border-l border-line bg-surface">
+        <>
+          {/* 모바일 전용: 참고자료 드로어 배경 */}
+          <div className="fixed inset-0 z-30 bg-black/30 md:hidden" onClick={() => setRefOpen(false)} />
+        <aside className="fixed inset-y-0 right-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col bg-surface shadow-2xl md:static md:z-auto md:h-auto md:max-w-none md:border-l md:border-line md:shadow-none">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <p className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-faint">참고 자료</p>
             <div className="flex items-center gap-1">
@@ -1230,9 +1258,10 @@ export default function ChatPage() {
             })()}
           </div>
         </aside>
+        </>
         ) : (
-        /* 접힌 참고자료 레일 */
-        <aside className="flex w-11 shrink-0 flex-col items-center border-l border-line bg-surface py-3">
+        /* 접힌 참고자료 레일 — 데스크톱에서만 */
+        <aside className="hidden md:flex w-11 shrink-0 flex-col items-center border-l border-line bg-surface py-3">
           <button onClick={() => setRefOpen(true)} title="참고자료 펼치기"
             className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-canvas hover:text-accent">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16v14H4zM9 5v14" /><path d="M15 10l2 2-2 2" /></svg>
