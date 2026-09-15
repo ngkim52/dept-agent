@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import DryRunPanel from "./DryRunPanel";
 
 // Phase 4 — 백업/복원 + 드라이런 자동평가 (관리자 지식 하네스 부가 도구)
 export default function BackupAssessPanel() {
@@ -118,7 +119,17 @@ export default function BackupAssessPanel() {
             ) : null}
           </div>
         )}
+
+        {/* 드라이런 평가 — 부서장 에이전트 Q&A LLM-as-judge */}
+        <section className="mt-5 rounded-2xl border border-line bg-surface p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-serif text-base font-semibold text-ink">드라이런 평가 (부서장 에이전트 Q&A)</h3>
+              <p className="mt-1 text-xs text-ink-soft">업무별 질문을 골라 평가합니다. 지식 공백·헛점, 그리고 과거 회의록의 종료된 이벤트를 현재 시점처럼 오인하는지까지 확인합니다.</p>
+            </div>
+          </div>
+          <DryRunPanel />
+        </section>
       </div>
-    
   );
 }

@@ -511,19 +511,6 @@ export default function ChatPage() {
     await sendWithContext(`[추가 정보 답변] ${answer.trim()} (앞선 질문: ${q})`);
   }
 
-  // 대시보드 "질문하기"로 진입한 경우: /chat?q=... 를 읽어 자동으로 질문 전송 (1회)
-  const bootQUse = useRef(true);
-  useEffect(() => {
-    if (!bootQUse.current) return;
-    bootQUse.current = false;
-    const q = new URLSearchParams(window.location.search).get("q");
-    if (q && q.trim()) {
-      history.replaceState(null, "", window.location.pathname);
-      send(q.trim());
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   /** HITL 응답을 현재 대화에 이어 보낸다 (send의 내부 로직 재사용) */
   async function sendWithContext(text: string) {
     if (!text.trim()) return;

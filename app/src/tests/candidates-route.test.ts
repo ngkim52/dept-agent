@@ -13,7 +13,7 @@ async function authed(user: any) {
 }
 
 describe("POST /api/admin/candidates — 처리", () => {
-  beforeEach(async () => { await resetDb(); await withDept(); });
+  beforeEach(async () => { process.env.DRYRUN_JUDGE_DISABLED = "1"; await resetDb(); await withDept(); });
 
   it("GET: 대기 후보에 연관 항목(related) 포함", async () => {
     const admin = await withUser({ role: "admin" });

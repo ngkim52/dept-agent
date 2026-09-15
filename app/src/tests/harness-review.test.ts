@@ -6,6 +6,7 @@ import {
   createEpisode, getEpisode, listEpisodes, updateEpisodeStatus,
   createCandidate, getCandidate, listCandidates, resolveCandidate,
   addEdge, listEdges, findPotentialConflicts, applyCandidate, tokenSet, jaccard,
+  findRelatedItems, findRelatedByLLM, getEpisodeDetail, publishEpisodeConclusion, pruneStaleCandidates,
 } from "@/lib/harness/review";
 
 beforeEach(async () => { await resetDb(); await withDept(); });
@@ -140,7 +141,6 @@ describe("applyCandidate — admin_chat source_of + 자기참조 엣지 제거 (
   });
 });
 
-import { pruneStaleCandidates, findRelatedItems } from "@/lib/harness/review";
 import { createMemory, createPrompt } from "@/lib/harness/store";
 import { listEffective } from "@/lib/harness/inventory";
 import { listPersonaPromptFragments } from "@/lib/agent/fragments";
@@ -201,5 +201,39 @@ describe("listEffective — 기본 지식 사본 편집(base_copied overlay가 �
     await createPrompt({ personaKey: "claims-planning", title: frag.title, content: "편집된 기본 지식", origin: "base_copied", sourceType: "base", sourceId: frag.id });
     const after = await listEffective("prompt", "claims-planning");
     expect(after.some((x) => x.source === "base" && x.baseRef === frag.id)).toBe(false);
+  });
+});
+
+describe("findRelatedByLLM — LLM이 진짜 유사 항목만 선택", () => {
+  it("무관한 항목은 제외하고 유사한 것만 반환", async () => {
+    const sim = await createMemory({ personaKey: "claims-planning", content: "손해율 5% 초과 시 원인분석 착수, 보험금 심사 기준", confidence: 0.9 });
+    await createMemory({ personaKey: "claims-planning", content: "팀 정기 회식 장소 협의", confidence: 0.9 });
+    const call = async () => JSON.stringify({ items: [{ id: sim.id, reason: "손해율 원인분석 주제 일치", score: 92 }] });
+    const rel = await findRelatedItems("claims-planning", "손해율이 5%를 초과하면 원인분석을 착수한다", 0.45, 5, call);
+    expect(rel.length).toBe(1);
+    expect(rel[0].id).toBe(sim.id);
+  });
+
+  it("유사 항목이 없으면 LLM이 빈 배열 반환 → 관련 없음(휴리스틱 대비)", async () => {
+    const call = async () => JSON.stringify({ items: [] });
+    const rel = await findRelatedByLLM("claims-planning", "오늘 점심 메뉴 추천", call);
+    expect(rel.length).toBe(0);
+  });
+});
+
+describe("에피소드 — 상세·결론 지식 저장 (영향 추적)", () => {
+  it("getEpisodeDetail이 파생 후보를 함께 반환", async () => {
+    const e = await createEpisode({ departmentId: "claims-planning", summary: "손해율 규칙", conclusion: "손해율 5% 초과 시 원인분석.", status: "ready" });
+    const det = await getEpisodeDetail(e.id);
+    expect(det.episode!.id).toBe(e.id);
+    expect(Array.isArray(det.candidates)).toBe(true);
+  });
+  it("publishEpisodeConclusion이 에피소드 결론을 메모리로 저장", async () => {
+    const e = await createEpisode({ departmentId: "claims-planning", summary: "재심사 기준", conclusion: "종결 건이라도 신규 자료가 나오면 재심사한다.", status: "ready" });
+    const r = await publishEpisodeConclusion(e.id, "admin-1");
+    expect(r!.memoryId).toBeTruthy();
+    const memRows = await db.select().from(schema.knowledgeMemories);
+    expect(memRows.length).toBe(1);
+    expect(String(memRows[0].content)).toContain("재심사");
   });
 });

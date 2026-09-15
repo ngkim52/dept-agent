@@ -27,6 +27,7 @@ export default function ReviewQueue() {
   const [nodes, setNodes] = useState<Record<string, { label: string; kindLabel: string }>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [genBusy, setGenBusy] = useState(false);
+  const [graphBusy, setGraphBusy] = useState(false);
   const [draft, setDraft] = useState<Record<string, { content: string; note: string }>>({});
   const [conflicts, setConflicts] = useState<Record<string, any[]>>({});
   const [applyMode, setApplyMode] = useState<Record<string, { mode: "create" | "modify" | "replace"; target?: string }>>({});
@@ -72,6 +73,26 @@ export default function ReviewQueue() {
       if (d.error) { flash(false, d.error); } else { flash(true, `에피소드 압축 완료 — 후보 ${(d.candidates ?? []).length}건 생성`); loadAll(); }
     } finally { setGenBusy(false); }
   }
+
+  async function buildGraph() {
+    setGraphBusy(true);
+    try {
+      const res = await fetch(`/api/admin/harness/graph/build?personaKey=${personaKey}`, { method: "POST" });
+      const d = await res.json();
+      if (d.error) { flash(false, d.error); } else { flash(true, `LLM 관계 제안 ${d.proposed ?? 0} · 신규 저장 ${d.added ?? 0}건`); loadGraph(); }
+    } finally { setGraphBusy(false); }
+  }
+
+  const [publishBusy, setPublishBusy] = useState<string | null>(null);
+  async function publishEp(id: string) {
+    setPublishBusy(id);
+    try {
+      const res = await fetch("/api/admin/episodes/publish", { method: "POST", headers: jh, body: JSON.stringify({ id }) });
+      const d = await res.json();
+      if (d.error) { flash(false, d.error); } else { flash(true, `에피소드 결론을 지식(메모리)으로 저장했습니다`); }
+    } finally { setPublishBusy(null); }
+  }
+
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4 sm:p-6">
@@ -148,6 +169,22 @@ export default function ReviewQueue() {
                               ))}
                             </select>
                           )}
+                          {(applyMode[c.id]?.mode ?? "create") !== "create" && (() => {
+                            const sel = (c.related ?? []).find((r) => `${r.type}:${r.id}` === applyMode[c.id]?.target) ?? c.related![0];
+                            if (!sel) return null;
+                            return (
+                              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                <div className="rounded-lg border border-line bg-canvas p-2">
+                                  <p className="text-[10px] font-semibold text-ink-faint">기존 지식 ({sel.type} · {sel.title})</p>
+                                  <p className="mt-1 text-[11px] leading-snug text-ink-soft">{sel.content || "(내용 없음)"}</p>
+                                </div>
+                                <div className="rounded-lg border border-ink/30 bg-[#fff8ec] p-2">
+                                  <p className="text-[10px] font-semibold text-ink-faint">새 제안 (후보)</p>
+                                  <p className="mt-1 text-[11px] leading-snug text-ink">{draft[c.id]?.content ?? c.proposedContent}</p>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
@@ -174,6 +211,13 @@ export default function ReviewQueue() {
                 </div>
                 <p className="mt-2 text-sm font-semibold text-ink">{e.summary}</p>
                 <p className="mt-1 text-xs leading-relaxed text-ink-soft">{e.conclusion}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <button onClick={() => publishEp(e.id)} disabled={publishBusy === e.id || !e.conclusion}
+                    className="rounded-md border border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#33312E] disabled:opacity-40">
+                    {publishBusy === e.id ? "저장 중…" : "결론을 지식(메모리)으로 저장"}
+                  </button>
+                  <span className="text-[11px] text-ink-faint">에피소드는 대화→지식 파이프라인의 중간 산출물입니다. 결론을 확정·저장하면 부서 페르소나 지식으로 재사용됩니다.</span>
+                </div>
               </div>
             ))}
         </div>
@@ -183,12 +227,17 @@ export default function ReviewQueue() {
         <div className="mt-4 rounded-xl border border-line bg-surface p-4">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-ink">지식 연결 그래프 <span className="font-mono text-ink-faint">({edges.length}건)</span></p>
-            <button onClick={loadGraph} className="font-mono text-[11px] text-ink-faint hover:text-accent">새로고침</button>
+            <div className="flex items-center gap-2">
+              <button onClick={buildGraph} disabled={graphBusy} className="lift rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#33312E] disabled:opacity-50">
+                {graphBusy ? "관계 판단 중…" : "＋ LLM로 관계 자동 구성"}
+              </button>
+              <button onClick={loadGraph} className="font-mono text-[11px] text-ink-faint hover:text-accent">새로고침</button>
+            </div>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-ink-faint">
             한 지식(좌: 출처)이 다른 지식(우: 대상)과 어떻게 이어지는지 보여줍니다.{" "}
-            <span className="text-accent">related=서로 연관</span> · <span className="text-accent">source_of=출처에서 파생</span>.
-            예) 대화·에피소드가 후보가 되고, 승인된 후보가 메모리·규칙·스킬로 저장될 때 그 연결이 남습니다.
+            <span className="text-accent">related=서로 연관</span> · <span className="text-accent">source_of=출처에서 파생</span> · <span className="text-accent">supports=지지</span> · <span className="text-accent">refutes=충돌</span> · <span className="text-accent">derives=파생</span>.
+            「＋ LLM로 관계 자동 구성」은 LLM이 활성 지식 항목 간 의미 관계를 판단·저장하며, 저장된 연결은 그래프에 즉시 표시됩니다.
           </p>
           <GraphView edges={edges} nodes={nodes} />
         </div>
