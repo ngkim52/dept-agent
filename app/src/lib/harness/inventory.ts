@@ -24,6 +24,8 @@ export type EffectiveItem = {
   active: boolean;
   origin: string;
   confidence: number;
+  /** 기본(base) 항목이 어떤 원본을 가리키는지 — 사본(base_copied overlay) 연결용 */
+  baseRef?: string;
   kind?: string;
   title?: string;
   content: string;
@@ -36,7 +38,7 @@ function basePrompts(personaKey: string): EffectiveItem[] {
   const p = getPersona(personaKey);
   if (!p) return [];
   return listPersonaPromptFragments(personaKey).map((f) => ({
-    source: "base" as const, id: f.id, personaKey,
+    source: "base" as const, id: f.id, baseRef: f.id, personaKey,
     name: "기본 프롬프트 · " + f.title, title: f.title,
     content: f.content, active: true, origin: "base", confidence: 1, kind: "base",
   }));
@@ -45,31 +47,53 @@ function basePrompts(personaKey: string): EffectiveItem[] {
 /** base 스킬(SKILL.md) → EffectiveItem[] */
 function baseSkills(personaKey: string): EffectiveItem[] {
   const hints = loadSkillFiles(personaSkillDirSafe(personaKey));
-  return hints.map((h, i) => ({
-    source: "base" as const, id: `base:skill:${personaKey}:${i}`,
-    personaKey, name: h.name || "스킬", description: h.description ?? "",
-    content: h.content, active: true, origin: "base", confidence: 1, kind: "base",
-  }));
+  return hints.map((h) => {
+    const baseRef = `base:skill:${personaKey}:${h.name || "스킬"}`;
+    return {
+      source: "base" as const, id: baseRef, baseRef,
+      personaKey, name: h.name || "스킬", description: h.description ?? "",
+      content: h.content, active: true, origin: "base", confidence: 1, kind: "base",
+    };
+  });
 }
 
 import { personaSkillDir } from "@/lib/agent/skills";
 function personaSkillDirSafe(k: string) { try { return personaSkillDir(k); } catch { return ""; } }
 
+/**
+ * 기본(base) 항목을 사본으로 덮어쓴(편집한) 학습 오버레이 key 목록.
+ * origin="base_copied" 이고 sourceType="base" + sourceId=baseRef 인 사본이 존재/활성 상태면
+ * 해당 기본 항목은 숨기고, 사본(learned)이 유효 편집본으로 노출된다.
+ */
+async function baseCopiedRefs(type: "prompt" | "skill", personaKey?: string): Promise<Set<string>> {
+  const listFn = type === "prompt" ? listPrompts : listSkills;
+  const rows = await listFn(personaKey);
+  const refs = new Set<string>();
+  for (const r of rows) {
+    if (r.origin === "base_copied" && r.sourceType === "base" && r.sourceId && r.active) refs.add(r.sourceId);
+  }
+  return refs;
+}
+
 /** type+personaKey → 유효 인벤토리 (base 먼저, learned 뒤) */
 export async function listEffective(type: HarnessEntryType, personaKey?: string): Promise<EffectiveItem[]> {
-  if (type === "prompt") {
+  if (type === "prompt" || type === "skill") {
     const keys = personaKey ? [personaKey] : (PERSONA_OPTIONS as readonly string[]);
+    const baseFn = type === "prompt" ? basePrompts : baseSkills;
+    const covered = await baseCopiedRefs(type, personaKey);
     const out: EffectiveItem[] = [];
-    for (const k of keys) out.push(...basePrompts(k));
-    const learned = ((await listPrompts(personaKey)) as any[]).map((r) => ({ ...r, source: "learned" as const }));
-    return [...out, ...learned];
-  }
-  if (type === "skill") {
-    const keys = personaKey ? [personaKey] : (PERSONA_OPTIONS as readonly string[]);
-    const out: EffectiveItem[] = [];
-    for (const k of keys) out.push(...baseSkills(k));
-    const learned = ((await listSkills(personaKey)) as any[]).map((r) => ({ ...r, source: "learned" as const }));
-    return [...out, ...learned];
+    for (const k of keys) {
+      for (const b of baseFn(k)) {
+        if (b.baseRef && covered.has(b.baseRef)) {
+          // 사본이 있는 기본 항목 → 유효 목록에서 숨김 (사본이 대신 표기됨)
+          continue;
+        }
+        out.push(b);
+      }
+    }
+    const learned = (type === "prompt" ? await listPrompts(personaKey) : await listSkills(personaKey)) as any[];
+    out.push(...learned.map((r) => ({ ...r, source: "learned" as const })));
+    return out;
   }
   const learned = ((await listMemories(personaKey)) as any[]).map((r) => ({ ...r, source: "learned" as const }));
   return learned;

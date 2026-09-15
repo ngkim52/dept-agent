@@ -10,6 +10,7 @@ type Item = {
   name?: string; description?: string; tags?: string | null;
   sourceType?: string | null; sourceId?: string | null;
   source?: "base" | "learned";
+  baseRef?: string;
 };
 
 const TYPE_LABEL: Record<Kind, string> = { prompt: "프롬프트 지식", skill: "스킬", memory: "메모리" };
@@ -44,6 +45,17 @@ export default function HarnessPanel() {
   }, [type, personaKey]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function copyBaseToLearned(item: Item) {
+    const body = type === "skill"
+      ? { personaKey: item.personaKey, name: item.name ?? "새 스킬", description: item.description ?? "", content: item.content, origin: "base_copied", sourceType: "base", sourceId: item.baseRef ?? null }
+      : { personaKey: item.personaKey, title: item.title ?? "기본 지식", content: item.content, origin: "base_copied", sourceType: "base", sourceId: item.baseRef ?? null };
+    const res = await fetch(`/api/admin/harness?type=${type}`, { method: "POST", headers: authHeaders, body: JSON.stringify(body) });
+    const d = await res.json();
+    if (!res.ok) { flash(false, d.error ?? "복사 실패"); return; }
+    flash(true, type === "skill" ? "기본 스킬을 사본으로 만들어 편집할 수 있습니다." : "기본 지식을 사본으로 만들어 편집할 수 있습니다.");
+    load();
+  }
 
   async function create() {
     if (!draft.content.trim()) return;
@@ -221,7 +233,11 @@ export default function HarnessPanel() {
               )}
               {renderContent(item)}
               {item.source === "base" ? (
-                <p className="mt-2 text-[11px] text-ink-faint">기본 지식은 시스템에 내장된 값이며 읽기 전용입니다. 이 항목을 개선하려면 검토 큐에서 승인한 학습 후보로 갱신됩니다.</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button onClick={() => copyBaseToLearned(item)}
+                    className="rounded-md border border-accent bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">이 항목 편집 (사본 만들기)</button>
+                  <span className="text-[11px] text-ink-faint">기본 지식은 시스템 내장값. 사본을 만들면 자유롭게 수정·삭제할 수 있습니다.</span>
+                </div>
               ) : (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {editing !== item.id && <button onClick={() => setEditing(item.id)} className="rounded-md border border-line-strong bg-surface px-2.5 py-1 text-xs text-ink">편집</button>}

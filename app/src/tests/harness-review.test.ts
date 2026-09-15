@@ -4,7 +4,7 @@ import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import {
   createEpisode, getEpisode, listEpisodes, updateEpisodeStatus,
-  createCandidate, listCandidates, resolveCandidate,
+  createCandidate, getCandidate, listCandidates, resolveCandidate,
   addEdge, listEdges, findPotentialConflicts, applyCandidate, tokenSet, jaccard,
 } from "@/lib/harness/review";
 
@@ -137,5 +137,69 @@ describe("applyCandidate — admin_chat source_of + 자기참조 엣지 제거 (
     const res = await applyCandidate(c.id, "admin-1");
     const all = (await listEdges()).filter((e) => e.fromId === res.entryId && e.toId === res.entryId);
     expect(all.length).toBe(0);
+  });
+});
+
+import { pruneStaleCandidates, findRelatedItems } from "@/lib/harness/review";
+import { createMemory, createPrompt } from "@/lib/harness/store";
+import { listEffective } from "@/lib/harness/inventory";
+import { listPersonaPromptFragments } from "@/lib/agent/fragments";
+
+describe("pruneStaleCandidates (1주일 후 미결정 큐 정리)", () => {
+  it("대기 후보가 ttl 지나면 삭제, 최신 대기는 유지", async () => {
+    const old = await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "m", action: "create_memory", proposedContent: "오래된 후보", confidence: 0.5 });
+    const fresh = await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "m", action: "create_memory", proposedContent: "신선한 후보", confidence: 0.5 });
+    // 오래된 후보의 createdAt을 8일 전으로 되돌림
+    const oldDate = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    await db.update(schema.improvementCandidates).set({ createdAt: oldDate }).where(eq(schema.improvementCandidates.id, old.id));
+    const pruned = await pruneStaleCandidates();
+    expect(pruned).toBe(1);
+    expect((await listCandidates()).length).toBe(1);
+    expect((await getCandidate(fresh.id))!.id).toBe(fresh.id);
+    expect((await getCandidate(old.id))).toBeNull();
+  });
+});
+
+describe("findRelatedItems (연관/유사 기존 지식 탐지)", () => {
+  it("유사한 메모리·프롬프트·스킬을 점수순 반환", async () => {
+    await createMemory({ personaKey: "claims-planning", content: "손해율이 5%를 초과하면 원인분석을 착수한다. 보험금 심사 기준", confidence: 0.9 });
+    const related = await findRelatedItems("claims-planning", "손해율이 5%를 초과하면 원인분석을 착수한다. 보험금 심사 기준 점검", 0.4, 5);
+    expect(related.length).toBeGreaterThan(0);
+    expect(related.some((r) => r.type === "memory")).toBe(true);
+  });
+});
+
+describe("applyCandidate modify/replace", () => {
+  it("modify: 기존 항목 내용을 수정(같은 id 유지)", async () => {
+    const m = await createMemory({ personaKey: "claims-planning", content: "기존 내용 (수정 전)", confidence: 0.4 });
+    const c = await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "conv", action: "create_memory", proposedContent: "수정된 새 내용 본문", confidence: 0.9 });
+    const res = await applyCandidate(c.id, "admin-1", { mode: "modify", targetType: "memory", targetId: m.id, content: "수정된 새 내용 본문" });
+    expect(res.entryId).toBe(m.id);
+    const re = await getCandidate(c.id);
+    expect(re!.status).toBe("applied");
+    const updated = await db.select().from(schema.knowledgeMemories).where(eq(schema.knowledgeMemories.id, m.id)).limit(1);
+    expect(String(updated[0].content)).toContain("수정된 새 내용");
+  });
+  it("replace: 기존 항목 비활성 + 새 항목 생성", async () => {
+    const m = await createMemory({ personaKey: "claims-planning", content: "교체될 기존 내용", confidence: 0.4 });
+    const c = await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "conv", action: "create_memory", proposedContent: "완전히 새 본문", confidence: 0.9 });
+    const res = await applyCandidate(c.id, "admin-1", { mode: "replace", targetType: "memory", targetId: m.id, content: "완전히 새 본문" });
+    expect(res.entryId).not.toBe(m.id);
+    const oldRow = await db.select({ active: schema.knowledgeMemories.active }).from(schema.knowledgeMemories).where(eq(schema.knowledgeMemories.id, m.id)).limit(1);
+    expect(oldRow[0].active).toBe(false);
+  });
+});
+
+describe("listEffective — 기본 지식 사본 편집(base_copied overlay가 기본 항목을 덮음)", () => {
+  it("base 프롬프트 조각을 사본으로 편집하면 유효 목록에서 숨겨짐", async () => {
+    const frag = (await listPersonaPromptFragments("claims-planning"))[0];
+    expect(frag).toBeTruthy();
+    const baseItems = await listEffective("prompt", "claims-planning");
+    const baseOne = baseItems.find((b) => b.baseRef === frag.id);
+    expect(baseOne && baseOne.source === "base").toBe(true);
+    // 사본(base_copied) 생성 → base 항목은 숨겨지고 learned 사본이 노출
+    await createPrompt({ personaKey: "claims-planning", title: frag.title, content: "편집된 기본 지식", origin: "base_copied", sourceType: "base", sourceId: frag.id });
+    const after = await listEffective("prompt", "claims-planning");
+    expect(after.some((x) => x.source === "base" && x.baseRef === frag.id)).toBe(false);
   });
 });

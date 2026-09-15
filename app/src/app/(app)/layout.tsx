@@ -66,7 +66,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 return (
                   <button key={it.href} onClick={() => { onNav?.(); router.push(it.href); }}
                     title={it.label}
-                    className={`relative flex w-full items-center justify-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors md:justify-start ${
+                    className={`relative flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors md:justify-start ${
                       isA ? "bg-ink text-white" : "text-ink-soft hover:bg-canvas hover:text-ink"
                     }`}>
                     <svg className="shrink-0" viewBox="0 0 24 24" width="17" height="17" fill={isA ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_ICONS[it.icon]} /></svg>

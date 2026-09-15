@@ -47,6 +47,42 @@ export async function listCandidates(opts?: { personaKey?: string; status?: Impr
 }
 
 /**
+ * 유효 기간이 지난 미결정(대기) 적용 후보를 정리한다.
+ * 어떤 선택(적용/거절)도 없이 ttl(기본 1주일)을 넘긴 대기 후보는 큐에서 제거한다.
+ */
+export async function pruneStaleCandidates(ttlMs = 7 * 24 * 60 * 60 * 1000): Promise<number> {
+  const cutoff = new Date(Date.now() - ttlMs).getTime();
+  const rows = await db.select().from(schema.improvementCandidates).where(eq(schema.improvementCandidates.status, "pending"));
+  const stale = rows.filter((r) => new Date(r.createdAt).getTime() < cutoff);
+  for (const r of stale) {
+    await db.delete(schema.improvementCandidates).where(eq(schema.improvementCandidates.id, r.id));
+  }
+  return stale.length;
+}
+
+export interface RelatedItem { type: "prompt" | "skill" | "memory"; id: string; title: string; content: string; score: number; }
+/** 후보 내용과 연관/유사한 기존 지식 항목(프롬프트·스킬·메모리) 반환 — 신규 생성 대신 수정/교체 선택지로 제공 */
+export async function findRelatedItems(personaKey: string, content: string, threshold = 0.45, limit = 5): Promise<RelatedItem[]> {
+  const baseScored = await findPotentialConflicts(personaKey, content, threshold);
+  const lists = await Promise.all([
+    db.select({ id: schema.knowledgeSkills.id, name: schema.knowledgeSkills.name, content: schema.knowledgeSkills.content, active: schema.knowledgeSkills.active })
+      .from(schema.knowledgeSkills).where(eq(schema.knowledgeSkills.personaKey, personaKey)),
+    db.select({ id: schema.knowledgeMemories.id, content: schema.knowledgeMemories.content, active: schema.knowledgeMemories.active })
+      .from(schema.knowledgeMemories).where(eq(schema.knowledgeMemories.personaKey, personaKey)),
+    db.select({ id: schema.knowledgePrompts.id, title: schema.knowledgePrompts.title, content: schema.knowledgePrompts.content, active: schema.knowledgePrompts.active })
+      .from(schema.knowledgePrompts).where(eq(schema.knowledgePrompts.personaKey, personaKey)),
+  ]);
+  const items: RelatedItem[] = [];
+  for (const s of lists[0]) if (s.active) items.push({ type: "skill", id: s.id, title: s.name || "스킬", content: s.content || "", score: jaccard(s.content || "", content) });
+  for (const m of lists[1]) if (m.active) items.push({ type: "memory", id: m.id, title: "메모리", content: m.content || "", score: jaccard(m.content || "", content) });
+  for (const p of lists[2]) if (p.active) items.push({ type: "prompt", id: p.id, title: p.title || "프롬프트", content: p.content || "", score: jaccard(p.content || "", content) });
+  for (const b of baseScored) items.push({ type: b.type as RelatedItem["type"], id: b.id, title: b.type === "memory" ? "메모리" : "프롬프트", content: b.content, score: b.score });
+  const seen = new Set<string>();
+  const uniq = items.filter((x) => { if (seen.has(x.id)) return false; seen.add(x.id); return true; });
+  return uniq.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+/**
  * 후보 상태 확정(부서장 의사결정 기록).
  * status: rejected | applied(적용 완료 후) — applyCandidate가 사용.
  * 그 외 단순 상태 변경(거절 등)용.
@@ -124,47 +160,56 @@ export interface ApplyResult {
 }
 
 /** 후보를 실제 지식 항목으로 생성(or 수정)하고 출처 edge + 버전 기록 후 applied 처리 */
+function candActionEntryType(action: string): ApplyResult["entryType"] {
+  if (action === "create_skill" || action === "update_skill") return "skill";
+  if (action === "create_prompt" || action === "update_prompt") return "prompt";
+  return "memory";
+}
+
 export async function applyCandidate(
   id: string,
   resolvedBy: string,
-  overrides?: { content?: string; title?: string; name?: string; description?: string; kind?: string },
+  overrides?: { content?: string; title?: string; name?: string; description?: string; kind?: string; mode?: "create" | "modify" | "replace"; targetType?: string; targetId?: string },
 ): Promise<ApplyResult> {
   const cand = await getCandidate(id);
   if (!cand) throw new Error("후보를 찾을 수 없습니다.");
   if (cand.status === "applied" || cand.status === "edited") throw new Error("이미 처리된 후보입니다.");
 
-  const {
-    createPrompt, createSkill, createMemory,
-  } = await import("@/lib/harness/store");
+  const store = await import("@/lib/harness/store");
+  const { createPrompt, createSkill, createMemory, updatePrompt, updateSkill, updateMemory, setActive } = store;
 
   const content = overrides?.content ?? cand.proposedContent ?? "";
   if (!content) throw new Error("적용할 내용이 없습니다.");
 
+  // 기본 동작은 신규 생성. 연관/유사 항목이 선택되면 수정(modify)·교체(replace) 가능.
+  const mode = overrides?.mode ?? "create";
+  const targetType = (overrides?.targetType as ApplyResult["entryType"] | undefined) ?? candActionEntryType(cand.action);
+  const targetId = overrides?.targetId ?? undefined;
+
   let entryType: ApplyResult["entryType"];
   let entryId: string;
-  if (cand.action === "create_prompt") {
-    const e = await createPrompt({
-      personaKey: cand.personaKey, kind: (overrides?.kind as any) ?? "addendum",
-      title: overrides?.title ?? cand.targetTitle ?? "검토 적용 지식",
-      content, origin: "review", confidence: cand.confidence,
-      sourceType: cand.sourceKind, sourceId: cand.sourceId,
-    }, resolvedBy);
-    entryType = "prompt"; entryId = e.id;
-  } else if (cand.action === "create_skill") {
-    const e = await createSkill({
-      personaKey: cand.personaKey, name: overrides?.name ?? cand.targetTitle ?? "검토 지식",
-      description: overrides?.description ?? cand.summary ?? "",
-      content, origin: "review", confidence: cand.confidence,
-      sourceType: cand.sourceKind, sourceId: cand.sourceId,
-    }, resolvedBy);
-    entryType = "skill"; entryId = e.id;
+  if (mode === "modify" && targetType && targetId) {
+    // 기존 항목 수정: 같은 항목에 내용을 덮어쓴다(이력 유지).
+    if (targetType === "prompt") { const e = await updatePrompt(targetId, { title: overrides?.title ?? cand.targetTitle ?? undefined, content }, resolvedBy); entryType = "prompt"; entryId = e.id; }
+    else if (targetType === "skill") { const e = await updateSkill(targetId, { name: overrides?.name ?? cand.targetTitle ?? undefined, description: overrides?.description ?? cand.summary ?? undefined, content }, resolvedBy); entryType = "skill"; entryId = e.id; }
+    else { const e = await updateMemory(targetId, { content, kind: (overrides?.kind as any) ?? undefined }, resolvedBy); entryType = "memory"; entryId = e.id; }
+  } else if (mode === "replace" && targetType && targetId) {
+    // 기존 항목 교체: 기존 항목을 비활성화하고, 후보 내용으로 새 항목을 생성한다.
+    try { await setActive(targetType, targetId, false, resolvedBy); } catch { /* 이미 없는 항목은 무시 */ }
+    if (targetType === "prompt") { const e = await createPrompt({ personaKey: cand.personaKey, kind: (overrides?.kind as any) ?? "addendum", title: overrides?.title ?? cand.targetTitle ?? "검토 적용 지식", content, origin: "review", confidence: cand.confidence, sourceType: cand.sourceKind, sourceId: cand.sourceId }, resolvedBy); entryType = "prompt"; entryId = e.id; }
+    else if (targetType === "skill") { const e = await createSkill({ personaKey: cand.personaKey, name: overrides?.name ?? cand.targetTitle ?? "검토 지식", description: overrides?.description ?? cand.summary ?? "", content, origin: "review", confidence: cand.confidence, sourceType: cand.sourceKind, sourceId: cand.sourceId }, resolvedBy); entryType = "skill"; entryId = e.id; }
+    else { const e = await createMemory({ personaKey: cand.personaKey, kind: (overrides?.kind as any) ?? "lesson", content, tags: undefined, origin: "review", confidence: cand.confidence, sourceConversationId: cand.sourceKind === "admin_chat" ? cand.sourceId : undefined }, resolvedBy); entryType = "memory"; entryId = e.id; }
   } else {
-    const e = await createMemory({
-      personaKey: cand.personaKey, kind: (overrides?.kind as any) ?? "lesson",
-      content, tags: undefined, origin: "review", confidence: cand.confidence,
-      sourceConversationId: cand.sourceKind === "admin_chat" ? cand.sourceId : undefined,
-    }, resolvedBy);
-    entryType = "memory"; entryId = e.id;
+    if (cand.action === "create_prompt") {
+      const e = await createPrompt({ personaKey: cand.personaKey, kind: (overrides?.kind as any) ?? "addendum", title: overrides?.title ?? cand.targetTitle ?? "검토 적용 지식", content, origin: "review", confidence: cand.confidence, sourceType: cand.sourceKind, sourceId: cand.sourceId }, resolvedBy);
+      entryType = "prompt"; entryId = e.id;
+    } else if (cand.action === "create_skill") {
+      const e = await createSkill({ personaKey: cand.personaKey, name: overrides?.name ?? cand.targetTitle ?? "검토 지식", description: overrides?.description ?? cand.summary ?? "", content, origin: "review", confidence: cand.confidence, sourceType: cand.sourceKind, sourceId: cand.sourceId }, resolvedBy);
+      entryType = "skill"; entryId = e.id;
+    } else {
+      const e = await createMemory({ personaKey: cand.personaKey, kind: (overrides?.kind as any) ?? "lesson", content, tags: undefined, origin: "review", confidence: cand.confidence, sourceConversationId: cand.sourceKind === "admin_chat" ? cand.sourceId : undefined }, resolvedBy);
+      entryType = "memory"; entryId = e.id;
+    }
   }
 
   // 충돌/연관 감지 → 관련 edge (방금 생성된 항목 자신은 제외)

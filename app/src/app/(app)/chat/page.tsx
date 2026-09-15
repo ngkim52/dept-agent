@@ -1,6 +1,6 @@
 "use client";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { NAV_GROUPS, NAV_ICONS } from "@/lib/nav";
 import { STRATEGY } from "@/lib/dashboard/strategy";
 
@@ -174,6 +174,7 @@ const I = {
 export default function ChatPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [convs, setConvs] = useState<Conv[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -217,6 +218,24 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // 대시보드 등에서 온 주제 자동 채움: /chat?q=…&dept=…
+  // (탭 새로고침·재진입 시 중복 채움이 생기지 않도록 '소비됨' 상태로 관리)
+  const consumed = useRef<{ q: boolean }>({ q: false });
+  useEffect(() => {
+    if (consumed.current.q) return;
+    const q = searchParams.get("q");
+    const dept = searchParams.get("dept");
+    if (dept) setActiveDepartmentId(dept);
+    if (q && q.trim()) {
+      consumed.current.q = true;
+      setInput(q.trim());
+      // 포커스는 약간 지연시켜 DOM이 준비된 뒤로
+      const t = setTimeout(() => { inputRef.current?.focus(); }, 50);
+      return () => clearTimeout(t);
+    }
+    // q가 없으면 계속 대기 (다음 진입 시 재시도)
+  }, [searchParams]);
+
   useEffect(() => {
     fetch("/api/auth/me").then(r => r.json()).then(d => {
       if (!d.user) { router.replace("/login"); return; }
@@ -256,11 +275,15 @@ export default function ChatPage() {
   // 대화 생성 헬퍼 — 새 대화 버튼 / 첫 메시지 자동 생성에서 함께 사용
   async function makeConversation(): Promise<string | null> {
     const isAdmin = user?.role === "admin";
-    if (isAdmin && !activeDepartmentId) return null;
+    // 부서 미지정 상태에서도 실패하지 않도록: 관리자는 대시보드 진입 기본값 등 이미 지정, 일반 구성원은 서버 사용자 부서 사용
+    if (isAdmin && !activeDepartmentId) { setError("대화를 시작하려면 부서를 선택해 주세요."); return null; }
     const body: any = isAdmin ? { departmentId: activeDepartmentId } : {};
     if (activeCategory) body.categoryKey = activeCategory;
     const d = await (await fetch("/api/conversations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json();
-    if (!d.conversation) return null;
+    if (!d.conversation) {
+      setError(d?.error ? String(d.error) : "대화를 시작하지 못했습니다.");
+      return null;
+    }
     setConvs(prev => [d.conversation, ...prev]);
     setActiveConvDeptId(d.conversation.departmentId ?? "");
     setActiveId(d.conversation.id);
@@ -374,7 +397,7 @@ export default function ChatPage() {
     let convId = activeId;
     if (!convId) {
       const c = await makeConversation();
-      if (!c) { setError("대화를 시작할 수 없습니다. 부서를 선택해 주세요."); return; }
+      if (!c) { setError(prev => prev || "대화를 시작할 수 없습니다."); return; }
       convId = c;
     }
     const targetConvId = convId; // 스트리밍 중 대화 전환 시 응답 오염 방지 (P1-A)
@@ -805,7 +828,7 @@ return (
                   const isA = pathname === it.href || pathname.startsWith(it.href + "/");
                   return (
                     <button key={it.href} onClick={() => { router.push(it.href); setSidebarOpen(false); }}
-                      className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${isA ? "bg-ink text-white" : "text-ink-soft hover:bg-canvas hover:text-ink"}`}>
+                      className={`flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${isA ? "bg-ink text-white" : "text-ink-soft hover:bg-canvas hover:text-ink"}`}>
                       <svg className="shrink-0" viewBox="0 0 24 24" width="16" height="16" fill={isA ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={NAV_ICONS[it.icon]} /></svg>
                       {it.label}
                     </button>
