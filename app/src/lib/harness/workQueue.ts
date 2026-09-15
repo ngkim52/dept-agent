@@ -78,6 +78,13 @@ export async function updateWorkTask(id: string, patch: Partial<NewWorkTask>): P
   return updated;
 }
 
+export async function deleteWorkTask(id: string): Promise<boolean> {
+  const cur = await getWorkTask(id);
+  if (!cur) return false;
+  await db.delete(schema.workTasks).where(eq(schema.workTasks.id, id));
+  return true;
+}
+
 /**
  * 지연/마감 임박 일감: 담당자에게 부서장에게 서면보고하도록 지시 문구 생성.
  * (실제 알림은 메시지 전달 계층에서 처리 — 여기서는 derived 지시 문자열 반환)

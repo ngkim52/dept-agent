@@ -393,7 +393,7 @@ function DeadlineCard({ dash }: { dash: ClaimDashboard }) {
   );
 }
 
-function WorkQueueCard({ tasks, stats, reload }: { tasks: any[]; stats: any; reload: () => void }) {
+function WorkQueueCard({ tasks, stats, reload, onDelete }: { tasks: any[]; stats: any; reload: () => void; onDelete?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", assignee: "", dueDate: "", content: "" });
   const st = stats ?? { total: 0, done: 0, delayed: 0, avgProgress: 0 };
@@ -429,6 +429,7 @@ function WorkQueueCard({ tasks, stats, reload }: { tasks: any[]; stats: any; rel
               <Tag tone={t.status === "done" ? "g" : t.status === "delayed" ? "r" : t.status === "doing" ? "b" : "n"}>{t.status === "doing" ? "진행" : t.status === "done" ? "완료" : t.status === "delayed" ? "지연" : "대기"}</Tag>
               <b style={{ fontSize: 12.5, flex: 1 }}>{t.title}</b>
               <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>{t.assignee || ""}{t.dueDate ? " · " + t.dueDate : ""}</span>
+              {onDelete && <button onClick={() => onDelete(t.id)} title="일감 삭제" style={{ fontSize: 10, border: "1px solid #E3E0DB", background: "#fff", borderRadius: 6, padding: "1px 6px", color: "#9F2F2D", cursor: "pointer" }}>삭제</button>}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
               <div style={{ flex: 1, height: 6, borderRadius: 4, background: "#EFECE6" }}><div style={{ width: `${t.progress ?? 0}%`, height: 6, borderRadius: 4, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
@@ -500,10 +501,11 @@ function MonitorCard({ m }: { m: Monitor }) {
   );
 }
 
-function MonRow({ t, actions }: { t: any; actions?: boolean }) {
+function MonRow({ t, onDelete }: { t: any; onDelete?: (id: string) => void }) {
   return (
     <div className="cd">
       <div className="cd-head"><Lvl tone={t.status === "delayed" ? "r" : t.status === "done" ? "g" : t.status === "doing" ? "b" : "n"} size={26} icon="bolt" iconSize={13} /><h3 style={{ flex: 1 }}>{t.title}</h3>
+        {onDelete && <button onClick={() => onDelete(t.id)} title="일감 삭제" style={{ border: "1px solid #E3E0DB", background: "#fff", borderRadius: 7, padding: "2px 8px", fontSize: 10.5, color: "#9F2F2D", cursor: "pointer" }}>삭제</button>}
         <QBtn label="질문" q={`일감「${t.title}」의 실행·진행 상황을 점검해 주세요.`} icon="chev" />
       </div>
       <div className="metriccell">
@@ -738,6 +740,7 @@ export default function Dashboard() {
 
   const loadWork = () => fetch("/api/workqueue").then(r => r.json()).then(d => { setWorkTasks(d.tasks ?? []); setWorkStats(d.stats ?? null); }).catch(() => {});
   const makeTask = (title: string) => { if (workTasks.some((w) => w.title === title)) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, source: "director_note" }) }).then(loadWork).catch(() => {}); };
+  const delTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "DELETE" }).then(loadWork).catch(() => {});
   const dash = data?.dash;
   const [meeting, setMeeting] = useState<SectionReview | null>(null);
   const [selKpi, setSelKpi] = useState<string | null>(null);
@@ -780,13 +783,13 @@ export default function Dashboard() {
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <DeadlineCard dash={dash} />
-              <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} />
+              <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} onDelete={delTask} />
             </div>
 
             <SectionTitle title="업무 진도 · 모니터링" note={`부서 워크큐 일감 ${workTasks.length}건`} />
             <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
               {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 부서 워크큐에서 일감을 생성하세요.</div>}
-              {workTasks.map(t => <MonRow key={t.id} t={t} />)}
+              {workTasks.map(t => <MonRow key={t.id} t={t} onDelete={delTask} />)}
             </div>
             <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 

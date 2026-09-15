@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb, withDept } from "./helpers";
-import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, syncTaskToRag } from "@/lib/harness/workQueue";
+import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, syncTaskToRag, deleteWorkTask } from "@/lib/harness/workQueue";
 
 beforeEach(async () => { await resetDb(); await withDept(); });
 
@@ -55,5 +55,11 @@ describe("부서 워크큐 (018-B)", () => {
     const t2 = await createWorkTask({ personaKey: "claims-planning", title: "손해율 목표" }, "user-1");
     expect(t2.id).not.toBe(t1.id);
     expect((await listWorkTasks({ personaKey: "claims-planning" })).length).toBe(2);
+  });
+  it("일감 삭제", async () => {
+    const t = await createWorkTask({ personaKey: "claims-planning", title: "삭제할 일감" }, "user-1");
+    expect(await deleteWorkTask(t.id)).toBe(true);
+    expect(await deleteWorkTask(t.id)).toBe(false);
+    expect((await listWorkTasks({ personaKey: "claims-planning" })).length).toBe(0);
   });
 });
