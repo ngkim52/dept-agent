@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const departments = sqliteTable("departments", {
   id: text("id").primaryKey(),
@@ -36,6 +36,9 @@ export const users = sqliteTable("users", {
     .notNull()
     .default("pending"),
   departmentId: text("department_id").references(() => departments.id),
+  responseStyle: text("response_style", { enum: ["coaching", "conclusion"] })
+    .notNull()
+    .default("coaching"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -54,6 +57,8 @@ export const conversations = sqliteTable("conversations", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
   departmentId: text("department_id").references(() => departments.id),
+  categoryKey: text("category_key"),
+  categoryLabel: text("category_label"),
   title: text("title"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 }, (t) => ({
@@ -90,6 +95,77 @@ export const documents = sqliteTable("documents", {
   userIdx: index("documents_user_idx").on(t.userId),
 }));
 
+// ===== 지식 하네스 (자기개선 지식 저장소, Phase 1) =====
+export const knowledgePrompts = sqliteTable("knowledge_prompts", {
+  id: text("id").primaryKey(),
+  personaKey: text("persona_key").notNull(),
+  kind: text("kind", { enum: ["addendum", "rule", "role", "correction"] }).notNull().default("addendum"),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  origin: text("origin", { enum: ["manual", "auto", "review", "base_copied"] }).notNull().default("manual"),
+  confidence: real("confidence").notNull().default(1),
+  sourceType: text("source_type"),
+  sourceId: text("source_id"),
+  orderIdx: integer("order_idx").notNull().default(0),
+  hitCount: integer("hit_count").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  personaIdx: index("knowledge_prompts_persona_idx").on(t.personaKey),
+}));
+
+export const knowledgeSkills = sqliteTable("knowledge_skills", {
+  id: text("id").primaryKey(),
+  personaKey: text("persona_key").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  content: text("content").notNull(),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  origin: text("origin", { enum: ["manual", "auto", "review", "base_copied"] }).notNull().default("manual"),
+  confidence: real("confidence").notNull().default(1),
+  sourceType: text("source_type"),
+  sourceId: text("source_id"),
+  orderIdx: integer("order_idx").notNull().default(0),
+  hitCount: integer("hit_count").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  personaIdx: index("knowledge_skills_persona_idx").on(t.personaKey),
+}));
+
+export const knowledgeMemories = sqliteTable("knowledge_memories", {
+  id: text("id").primaryKey(),
+  personaKey: text("persona_key").notNull(),
+  kind: text("kind", { enum: ["fact", "preference", "decision", "lesson", "precedent"] }).notNull().default("fact"),
+  content: text("content").notNull(),
+  tags: text("tags"), // JSON 배열 문자열
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  origin: text("origin", { enum: ["manual", "auto", "review", "base_copied"] }).notNull().default("manual"),
+  confidence: real("confidence").notNull().default(1),
+  hitCount: integer("hit_count").notNull().default(0),
+  sourceConversationId: text("source_conversation_id"),
+  sourceMessageId: text("source_message_id"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  personaIdx: index("knowledge_memories_persona_idx").on(t.personaKey),
+}));
+
+export const knowledgeVersions = sqliteTable("knowledge_versions", {
+  id: text("id").primaryKey(),
+  entryType: text("entry_type", { enum: ["prompt", "skill", "memory"] }).notNull(),
+  entryId: text("entry_id").notNull(),
+  contentBefore: text("content_before"), // JSON 스냅샷 (변경 전 항목 전체)
+  contentAfter: text("content_after"), // JSON 스냅샷 (변경 후 항목 전체)
+  action: text("action", { enum: ["create", "update", "disable", "activate", "restore", "delete"] }).notNull(),
+  changedBy: text("changed_by"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  entryIdx: index("knowledge_versions_entry_idx").on(t.entryType, t.entryId),
+}));
+
+
 export type Department = typeof departments.$inferSelect;
 export type AppSetting = typeof appSettings.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -98,7 +174,92 @@ export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 
+export type KnowledgePrompt = typeof knowledgePrompts.$inferSelect;
+export type KnowledgeSkill = typeof knowledgeSkills.$inferSelect;
+export type KnowledgeMemory = typeof knowledgeMemories.$inferSelect;
+export type KnowledgeVersion = typeof knowledgeVersions.$inferSelect;
 
+export type HarnessEntryType = "prompt" | "skill" | "memory";
+
+
+
+
+
+export const episodes = sqliteTable("episodes", {
+  id: text("id").primaryKey(),
+  departmentId: text("department_id").notNull().references(() => departments.id),
+  periodFrom: integer("period_from", { mode: "timestamp" }),
+  periodTo: integer("period_to", { mode: "timestamp" }),
+  summary: text("summary"),
+  conclusion: text("conclusion"),
+  sourceIds: text("source_ids"), // JSON (message id 목록)
+  tokenCount: integer("token_count").notNull().default(0),
+  status: text("status", { enum: ["draft", "ready", "reviewed"] }).notNull().default("draft"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  deptIdx: index("episodes_dept_idx").on(t.departmentId),
+}));
+
+export const improvementCandidates = sqliteTable("improvement_candidates", {
+  id: text("id").primaryKey(),
+  personaKey: text("persona_key").notNull(),
+  sourceKind: text("source_kind", { enum: ["episode", "admin_chat", "knowledge_gap", "judgment_rule"] }).notNull(),
+  sourceId: text("source_id").notNull(),
+  requestType: text("request_type", { enum: ["episode", "admin_chat", "knowledge_gap", "judgment_rule"] }).notNull().default("admin_chat"),
+  proposedByRole: text("proposed_by_role", { enum: ["user", "admin"] }).notNull().default("admin"),
+  sourceConversationId: text("source_conversation_id"),
+  summary: text("summary"),
+  action: text("action", { enum: ["create_skill", "update_skill", "create_prompt", "update_prompt", "create_memory", "update_memory"] }).notNull(),
+  targetTitle: text("target_title"),
+  proposedContent: text("proposed_content"),
+  confidence: real("confidence").notNull().default(0),
+  status: text("status", { enum: ["pending", "approved", "rejected", "applied", "edited"] }).notNull().default("pending"),
+  adminNote: text("admin_note"),
+  resolvedBy: text("resolved_by"),
+  resolvedAt: integer("resolved_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  personaIdx: index("candidates_persona_idx").on(t.personaKey),
+  statusIdx: index("candidates_status_idx").on(t.status),
+}));
+
+export const knowledgeEdges = sqliteTable("knowledge_edges", {
+  id: text("id").primaryKey(),
+  fromType: text("from_type").notNull(),
+  fromId: text("from_id").notNull(),
+  toType: text("to_type").notNull(),
+  toId: text("to_id").notNull(),
+  rel: text("rel", { enum: ["derives", "refutes", "supports", "related", "source_of"] }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  fromIdx: index("edges_from_idx").on(t.fromType, t.fromId),
+}));
+
+
+// ── 회의록 · 녹음 → 지식 적재 (015-F4) ──
+export const meetings = sqliteTable("meetings", {
+  id: text("id").primaryKey(),
+  departmentId: text("department_id").notNull(),
+  title: text("title").notNull(),
+  categoryKey: text("category_key"),
+  rawText: text("raw_text").notNull(),            // 녹취 원문
+  minutesJson: text("minutes_json"),               // 회의록(참석/안건/결정/액션) JSON
+  knowledgeApplied: integer("knowledge_applied", { mode: "boolean" }).notNull().default(false),
+  sourceName: text("source_name"),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  meetDeptIdx: index("meetings_dept_idx").on(t.departmentId),
+}));
+export type Episode = typeof episodes.$inferSelect;
+export type NewEpisode = typeof episodes.$inferInsert;
+export type ImprovementCandidate = typeof improvementCandidates.$inferSelect;
+export type NewImprovementCandidate = typeof improvementCandidates.$inferInsert;
+export type KnowledgeEdge = typeof knowledgeEdges.$inferSelect;
+export type NewKnowledgeEdge = typeof knowledgeEdges.$inferInsert;
+export type Meeting = typeof meetings.$inferSelect;
+export type NewMeeting = typeof meetings.$inferInsert;
 
 export const usersRelations = relations(users, ({ one }) => ({
   department: one(departments, { fields: [users.departmentId], references: [departments.id] }),
@@ -129,3 +290,39 @@ export const departmentsRelations = relations(departments, ({ many }) => ({
 export const departmentDatasetsRelations = relations(departmentDatasets, ({ one }) => ({
   department: one(departments, { fields: [departmentDatasets.departmentId], references: [departments.id] }),
 }));
+
+
+// ── 멀티턴 답변 → 단일 통합 Q/A (지식그래프 노드) ──
+export const qaConsolidations = sqliteTable("qa_consolidations", {
+  id: text("id").primaryKey(),
+  canonicalQuestion: text("canonical_question").notNull(),
+  intent: text("intent"),
+  mergedAnswer: text("merged_answer").notNull(),
+  summary: text("summary"),
+  entities: text("entities"), // JSON array
+  sourceConversationId: text("source_conversation_id"),
+  status: text("status").notNull().default("draft"), // draft|verified|rejected
+  confidence: real("confidence").notNull().default(0.5),
+  turns: integer("turns").notNull().default(1),
+  usedCount: integer("used_count").notNull().default(0),
+  ragDocumentId: text("rag_document_id"), // RAGFlow 데이터셋 문서 id (벡터 인덱스)
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  qaQuestionIdx: index("qa_question_idx").on(t.canonicalQuestion),
+  qaStatusIdx: index("qa_status_idx").on(t.status),
+}));
+export type QAConsolidation = typeof qaConsolidations.$inferSelect;
+export type NewQAConsolidation = typeof qaConsolidations.$inferInsert;
+
+export const qaLinks = sqliteTable("qa_links", {
+  id: text("id").primaryKey(),
+  fromId: text("from_id").notNull().references(() => qaConsolidations.id),
+  toId: text("to_id").notNull().references(() => qaConsolidations.id),
+  relation: text("relation").notNull(), // similar|follow_up|entails
+  weight: real("weight").notNull().default(0.5),
+}, (t) => ({
+  qaLinkFromIdx: index("qa_link_from_idx").on(t.fromId),
+}));
+export type QALink = typeof qaLinks.$inferSelect;
+export type NewQALink = typeof qaLinks.$inferInsert;

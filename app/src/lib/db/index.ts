@@ -5,6 +5,7 @@ import * as schema from "./schema";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 
 // 드라이저 스키마 자동 생성 — 마이그레이션 폴더 기준 (첫 실행/기존 DB 모두 안전)
 const dir = process.env.DATA_DIR ?? path.join(process.cwd(), "data");
@@ -20,13 +21,72 @@ export const db = drizzle(sqlite, { schema });
 export { schema };
 
 // 모듈 로드 시 마이그레이션 수행 (없는 테이블만 생성, 멱등)
+// 저널(__drizzle_migrations)이 비어 있어 스키마는 있으나 재실행되면 "table already exists"로
+// 매 로드마다 실패·재실행이 반복될 수 있다. 스키마가 이미 완성된 경우엔 저널을 역으로
+// 채워(백필) 멱등하게 만든다. (스키마가 진짜 없는 신규 DB는 migrate()가 정상 적용)
+
+// 멀티턴 통합 Q/A 테이블 보장 (마이그레이션 0008 — 스키마만 있고 물리 테이블이 없는 안전망)
+try {
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS qa_consolidations (
+    id text PRIMARY KEY NOT NULL,
+    canonical_question text NOT NULL,
+    intent text,
+    merged_answer text NOT NULL,
+    summary text,
+    entities text,
+    source_conversation_id text,
+    status text DEFAULT 'draft' NOT NULL,
+    confidence real DEFAULT 0.5 NOT NULL,
+    turns integer DEFAULT 1 NOT NULL,
+    used_count integer DEFAULT 0 NOT NULL,
+    rag_document_id text,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS qa_question_idx ON qa_consolidations (canonical_question);
+  CREATE INDEX IF NOT EXISTS qa_status_idx ON qa_consolidations (status);
+  CREATE TABLE IF NOT EXISTS qa_links (
+    id text PRIMARY KEY NOT NULL,
+    from_id text NOT NULL,
+    to_id text NOT NULL,
+    relation text NOT NULL,
+    weight real DEFAULT 0.5 NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS qa_link_from_idx ON qa_links (from_id);`);
+} catch { /* 무시 */ }
+
+function syncMigrationJournal() {
+  try {
+    const journalPath = path.join(migrationsFolder, "meta", "_journal.json");
+    if (!fs.existsSync(journalPath)) return;
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf-8"));
+    const existStmt = sqlite.prepare("SELECT 1 FROM __drizzle_migrations WHERE hash = ?");
+    const insStmt = sqlite.prepare("INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)");
+    const haveSchema = [
+      "conversations", // 0000
+      "knowledge_edges", // 0004 (최신)
+    ].every((tb) => sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(tb));
+    if (!haveSchema) return; // 신규 DB — migrate()가 직접 적용할 것
+    const t = String(Date.now());
+    for (const e of journal.entries ?? []) {
+      const file = path.join(migrationsFolder, e.tag + ".sql");
+      if (!fs.existsSync(file)) continue;
+      const hash = createHash("sha256").update(fs.readFileSync(file, "utf-8")).digest("hex");
+      if (!existStmt.get(hash)) insStmt.run(hash, t); // hash에 유니크 제약이 없어 존재 확인 후 삽입 (멱등)
+    }
+  } catch {
+    /* 저널 동기화 실패는 치명적이지 않음 */
+  }
+}
 try {
   if (fs.existsSync(migrationsFolder)) {
     migrate(db, { migrationsFolder });
+    syncMigrationJournal();
   }
 } catch (e) {
   // 초기 스키마 없이도 서버가 뜰 수 있도록 로그만 남기고 계속 (개발 대비)
   console.error("[db] 마이그레이션 실패(무시):", (e as Error).message);
+  syncMigrationJournal();
 }
 
 // 첫 실행 편의: 기본 부서 보장 + (ADMIN_EMAIL/PASSWORD env 시) 관리자 계정 생성

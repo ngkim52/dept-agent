@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보험금심사기획팀 · 업무 대시보드 (목업)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" rel="stylesheet">
+<style>
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --canvas:#FAFAF9; --surface:#FFFFFF;
+  --ink:#1C1917; --ink-soft:#78716C; --ink-faint:#A8A29E;
+  --line:#E7E5E4; --line-strong:#D6D3D1;
+  --accent:#1F6C9F; --accent-deep:#155E8C; --accent-soft:#E8F1F9;
+  --green:#346538; --green-bg:#EDF3EC;
+  --amber:#8A6116; --amber-bg:#F9F3E3;
+  --red:#9F2F2D; --red-bg:#FBE9E9;
+  --serif:"Noto Serif KR","Pretendard Variable","Apple SD Gothic Neo",serif;
+  --sans:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  --r:10px;
+}
+html,body{height:100%;}
+body{
+  font-family:var(--sans); background:var(--canvas); color:var(--ink);
+  font-feature-settings:"tnum"; -webkit-font-smoothing:antialiased; font-size:14px; line-height:1.6;
+}
+*::-webkit-scrollbar{width:10px;height:10px;}
+*::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:6px;border:2px solid var(--canvas);}
+*::-webkit-scrollbar-track{background:transparent;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px;}
+button{font-family:inherit;cursor:pointer;}
+.mono{font-family:var(--mono);}
+.serif{font-family:var(--serif);}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.02em;white-space:nowrap;}
+.tag.g{background:#EDF3EC;color:#346538;}
+.tag.a{background:#F9F3E3;color:#8A6116;}
+.tag.r{background:#FBE9E9;color:#9F2F2D;}
+.tag.b{background:#E8F1F9;color:#1F6C9F;}
+.tag.n{background:#F5F5F4;color:#78716C;}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--ink-faint);font-weight:600;}
+
+/* ---------- 앱 셸 ---------- */
+.app{display:flex;height:100vh;overflow:hidden;}
+/* 레일 */
+.rail{
+  width:72px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:2px;z-index:20;
+}
+.rail .brand{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:9px;}
+.rail .brand img{width:34px;height:34px;object-fit:contain;}
+.rail nav{display:flex;flex-direction:column;gap:4px;margin-top:18px;width:100%;align-items:center;}
+.rail nav button{
+  width:52px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  border:none;background:transparent;color:var(--ink-soft);border-radius:9px;transition:background .15s,color .15s;
+}
+.rail nav button:hover{background:var(--canvas);color:var(--ink);}
+.rail nav button.active{background:var(--accent-soft);color:var(--accent);}
+.rail nav button span{font-size:9.5px;font-weight:600;letter-spacing:.02em;}
+.rail .railfoot .kq{width:42px;height:40px;border-radius:10px;}
+.railfoot{margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:8px;}
+
+/* 본문 */
+.main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{
+  height:58px;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 20px;
+  border-bottom:1px solid var(--line);background:rgba(255,255,255,.72);backdrop-filter:blur(8px);z-index:15;
+}
+.dept-select{
+  display:flex;align-items:center;gap:8px;padding:6px 10px 6px 8px;border:1px solid var(--line-strong);
+  border-radius:8px;background:var(--surface);font-size:12.5px;font-weight:600;color:var(--ink);
+}
+.dept-select svg{color:var(--ink-faint);}
+.topmeta{display:flex;align-items:center;gap:10px;margin-left:auto;}
+.topmeta .datebox{text-align:right;line-height:1.35;}
+.topmeta .datebox b{font-size:12.5px;font-weight:700;}
+.topmeta .datebox span{font-size:10.5px;color:var(--ink-faint);font-family:var(--mono);}
+.mock-badge{
+  display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;
+  background:var(--amber-bg);color:var(--amber);font-size:11px;font-weight:700;letter-spacing:.03em;border:1px solid #EADFC0;
+}
+.userchip{display:flex;align-items:center;gap:9px;padding:5px 10px 5px 6px;border:1px solid var(--line);border-radius:999px;background:var(--surface);}
+.userchip .ava{width:26px;height:26px;border-radius:999px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:600;font-size:12px;}
+.userchip .who{line-height:1.3;}
+.userchip .who b{font-size:11.5px;display:block;font-weight:700;}
+.userchip .who span{font-size:10px;color:var(--ink-faint);font-family:var(--mono);}
+
+.view{flex:1;min-height:0;display:none;flex-direction:column;}
+.view.show{display:flex;}
+.hidden{display:none !important;}
+
+/* ---------- 대시보드 ---------- */
+.dash{flex:1;overflow-y:auto;padding:22px 24px 90px;}
+.dash-wrap{max-width:1440px;margin:0 auto;}
+
+/* 오늘의 집중 밴드 */
+.focus{
+  display:flex;align-items:stretch;gap:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);
+  overflow:hidden;margin-bottom:18px;box-shadow:0 1px 0 rgba(0,0,0,.02);
+}
+.focus .lead{
+  min-width:235px;background:var(--ink);color:#fff;padding:16px 20px;display:flex;flex-direction:column;justify-content:space-between;gap:10px;
+}
+.focus .lead .big{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:-.01em;line-height:1.45;}
+.focus .lead .sub{font-size:11px;color:#D6D3D1;font-family:var(--mono);letter-spacing:.04em;}
+.focus .items{flex:1;display:grid;grid-template-columns:repeat(3,1fr);}
+.fitem{padding:14px 16px;display:flex;flex-direction:column;gap:6px;border-left:1px solid var(--line);position:relative;transition:background .15s;}
+.fitem:hover{background:var(--canvas);}
+.fitem + .fitem{border-left:1px solid var(--line);}
+.fitem .row1{display:flex;align-items:center;gap:8px;}
+.fitem .lvl{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.fitem h4{font-size:12.5px;font-weight:700;line-height:1.4;}
+.fitem p{font-size:11.5px;color:var(--ink-soft);line-height:1.5;}
+.fitem .meta{display:flex;align-items:center;gap:8px;margin-top:2px;}
+.qbtn{
+  display:inline-flex;align-items:center;gap:5px;margin-left:auto;border:1px solid var(--line-strong);background:var(--surface);
+  color:var(--ink-soft);border-radius:7px;padding:4px 8px;font-size:10.5px;font-weight:600;transition:all .15s;
+}
+.qbtn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin-bottom:14px;}
+.kpi{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:16px 16px 14px;display:flex;flex-direction:column;gap:8px;position:relative;transition:box-shadow .2s,transform .2s;overflow:hidden;}
+.kpi:hover{box-shadow:0 4px 14px rgba(28,25,23,.05);}
+.kpi .khead{display:flex;align-items:center;gap:6px;}
+.kpi .khead .lvl{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.kpi h3{font-size:11.5px;font-weight:700;color:var(--ink-soft);letter-spacing:.01em;}
+.kpi .kbody{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;}
+.kpi .num{font-family:var(--serif);font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.05;color:var(--ink);}
+.kpi .unit{font-size:12px;font-weight:700;color:var(--ink-soft);}
+.kpi .kfoot{display:flex;align-items:center;gap:6px;margin-top:auto;font-size:11px;color:var(--ink-soft);}
+.kq{width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-faint);display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.kq:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+.cp-head .kq{margin-left:4px;}
+.kpi .kq{position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:var(--surface);color:var(--ink-faint);display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.kpi .kq:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+.spark{width:74px;height:24px;flex-shrink:0;}
+.s1{grid-column:span 3;}.s2{grid-column:span 3;}.s3{grid-column:span 2;}.s4{grid-column:span 2;}.s5{grid-column:span 2;}
+.kbar{height:6px;border-radius:99px;background:#F0EFED;overflow:hidden;position:relative;margin-top:2px;}
+.kbar i{display:block;height:100%;border-radius:99px;background:var(--accent);}
+.kbar .tmark{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-soft);}
+
+/* 파이프라인 */
+.pipe{display:flex;align-items:stretch;gap:0;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:14px;padding:16px 18px;}
+.pipe .ptitle{display:flex;flex-direction:column;justify-content:center;min-width:150px;padding-right:16px;border-right:1px solid var(--line);}
+.pipe .ptitle h3{font-family:var(--serif);font-size:15px;font-weight:700;letter-spacing:-.01em;}
+.pipe .ptitle p{font-size:11px;color:var(--ink-soft);margin-top:3px;line-height:1.5;}
+.pstage{flex:1;position:relative;padding:2px 14px 2px 8px;min-width:0;}
+.pstage .pcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--canvas);height:100%;display:flex;flex-direction:column;gap:5px;transition:border-color .15s,background .15s;}
+.pstage:hover .pcard{border-color:var(--accent);background:var(--accent-soft);}
+.pstage .ph{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;}
+.pstage .pn{font-family:var(--serif);font-size:19px;font-weight:700;letter-spacing:-.01em;}
+.pstage .pd{font-size:10.5px;color:var(--ink-soft);line-height:1.4;}
+.pstage .pq{margin-left:auto;border:none;background:transparent;color:var(--ink-faint);width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;}
+.pstage .pq:hover{color:var(--accent);background:var(--accent-soft);}
+.parrow{display:flex;align-items:center;color:var(--ink-faint);flex-shrink:0;}
+.pflownote{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;}
+.pflownote .sum{font-size:11px;color:var(--ink-soft);}
+
+/* 그리드 섹션 */
+.row{display:grid;grid-template-columns:repeat(12,1fr);gap:14px;margin-bottom:14px;}
+.card{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0;}
+.card .chead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.card .chead h3{font-size:13px;font-weight:700;letter-spacing:-.01em;}
+.card .cmore{margin-left:auto;border:none;background:transparent;color:var(--ink-faint);font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;}
+.card .cmore:hover{color:var(--accent);}
+.c7{grid-column:span 7;}.c5{grid-column:span 5;}.c4{grid-column:span 4;}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:8px;overflow:hidden;}
+.seg button{border:none;background:var(--surface);padding:4px 11px;font-size:11px;font-weight:600;color:var(--ink-soft);}
+.seg button.on{background:var(--ink);color:#fff;}
+
+/* 차트 */
+.chartbox{position:relative;width:100%;height:250px;}
+.chartbox svg{width:100%;height:100%;display:block;}
+.legend{display:flex;gap:14px;font-size:10.5px;color:var(--ink-soft);flex-wrap:wrap;}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block;margin-right:5px;vertical-align:middle;}
+.legend .dot{width:3px;height:3px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;}
+
+/* 큐 테이블 */
+.qtable{width:100%;border-collapse:collapse;font-size:11.5px;}
+.qtable th{text-align:left;font-weight:600;font-size:10px;letter-spacing:.06em;color:var(--ink-faint);font-family:var(--mono);padding:6px 8px;border-bottom:1px solid var(--line);}
+.qtable td{padding:7px 8px;border-bottom:1px solid var(--line);}
+.qtable tr:last-child td{border-bottom:none;}
+.qtable .cnt{font-family:var(--mono);font-weight:700;}
+.qtable .bar{height:5px;border-radius:99px;background:#F0EFED;overflow:hidden;min-width:56px;position:relative;}
+.qtable .bar i{display:block;height:100%;background:var(--accent);border-radius:99px;}
+.qtable .bar i.over{background:var(--red);}
+
+/* 마감 리스트 */
+.ddlist{display:flex;flex-direction:column;}
+.dd{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line);}
+.dd:last-child{border-bottom:none;}
+.dd .dday{width:44px;text-align:center;flex-shrink:0;line-height:1.25;}
+.dd .dday b{display:block;font-family:var(--serif);font-size:17px;font-weight:700;}
+.dd .dday span{font-size:9.5px;color:var(--ink-faint);font-family:var(--mono);}
+.dd .dt{flex:1;min-width:0;}
+.dd .dt h4{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dd .dt p{font-size:10.5px;color:var(--ink-soft);font-family:var(--mono);}
+.dd .dstate{flex-shrink:0;}
+
+/* 3칸 하단 */
+.metriccell{display:flex;flex-direction:column;gap:10px;}
+.metricrow{display:flex;align-items:center;gap:10px;}
+.metricrow .gauge{flex:1;}
+.metricrow .gv{font-family:var(--mono);font-size:13px;font-weight:700;min-width:64px;text-align:right;}
+.big-num{font-family:var(--serif);font-size:26px;font-weight:700;letter-spacing:-.02em;}
+.big-num small{font-size:13px;font-weight:700;color:var(--ink-soft);}
+.planline{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--ink-soft);border-top:1px dashed var(--line);padding-top:9px;margin-top:2px;}
+.mlist{display:flex;flex-direction:column;gap:7px;font-size:11.5px;}
+.mitem{display:flex;gap:8px;align-items:flex-start;line-height:1.5;}
+.mitem .mb{width:6px;height:6px;border-radius:2px;margin-top:6px;flex-shrink:0;}
+.mitem b{font-weight:700;}
+
+/* 뉴스/공시 */
+.news-tabs{display:flex;gap:4px;margin-left:auto;}
+.news-tabs button{border:1px solid var(--line-strong);background:var(--surface);border-radius:7px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--ink-soft);}
+.news-tabs button.on{background:var(--ink);border-color:var(--ink);color:#fff;}
+.newslist{display:flex;flex-direction:column;max-height:430px;overflow-y:auto;}
+.nitem{display:flex;gap:12px;padding:11px 4px;border-bottom:1px solid var(--line);align-items:flex-start;transition:background .12s;border-radius:8px;}
+.nitem:hover{background:var(--canvas);}
+.nitem:last-child{border-bottom:none;}
+.nitem .ndate{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);min-width:44px;padding-top:3px;}
+.nitem .nc{flex:1;min-width:0;}
+.nitem .nc h4{font-size:12px;font-weight:700;line-height:1.45;}
+.nitem .nc p{font-size:10.5px;color:var(--ink-soft);margin-top:2px;line-height:1.5;}
+.nitem .nq{flex-shrink:0;}
+
+/* 채팅 패널 (대시보드 우측) */
+.chatpanel{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--surface);height:520px;overflow:hidden;}
+.cp-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);}
+.cp-head .pchip{display:flex;align-items:center;gap:8px;}
+.cp-head .pchip .ava{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;}
+.cp-head .pchip b{font-size:12.5px;display:block;}
+.cp-head .pchip span{font-size:10px;color:var(--ink-faint);font-family:var(--mono);}
+.ctx-toggle{
+  display:inline-flex;align-items:center;gap:6px;margin-left:auto;border:1px solid var(--line);background:var(--canvas);
+  border-radius:999px;padding:4px 9px;font-size:10px;font-weight:700;color:var(--ink-faint);transition:all .15s;
+}
+.ctx-toggle.on{background:var(--accent-soft);border-color:#BFD9EA;color:var(--accent);}
+.ctx-toggle .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-faint);}
+.ctx-toggle.on .dot{background:var(--accent);}
+.ctxbar{display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;background:var(--accent-soft);border-bottom:1px solid #D9E7F2;font-size:10.5px;color:var(--accent-deep);}
+.ctxbar b{font-weight:700;}
+.cp-msgs{flex:1;overflow-y:auto;padding:16px 14px 8px;display:flex;flex-direction:column;gap:14px;}
+.msg{display:flex;flex-direction:column;gap:5px;max-width:88%;}
+.msg.user{align-self:flex-end;align-items:flex-end;}
+.msg .who{font-size:9.5px;font-family:var(--mono);color:var(--ink-faint);letter-spacing:.05em;}
+.msg .bubble{font-size:12px;line-height:1.65;padding:9px 12px;border-radius:11px;}
+.msg.user .bubble{background:var(--ink);color:#fff;border-bottom-right-radius:3px;}
+.msg.assistant .bubble{background:var(--canvas);border:1px solid var(--line);border-bottom-left-radius:3px;}
+.msg .refs{display:flex;gap:5px;flex-wrap:wrap;}
+.msg .ref{display:inline-flex;align-items:center;gap:4px;font-size:9.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:2px 8px;}
+.typing{display:inline-flex;gap:4px;padding:10px 13px;background:var(--canvas);border:1px solid var(--line);border-radius:11px;border-bottom-left-radius:3px;}
+.typing i{width:5px;height:5px;border-radius:50%;background:var(--ink-faint);animation:blink 1.2s infinite;}
+.typing i:nth-child(2){animation-delay:.2s;}.typing i:nth-child(3){animation-delay:.4s;}
+@keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+.cp-sugs{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px;}
+.sug{border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:10.5px;color:var(--ink-soft);font-weight:600;transition:all .15s;}
+.sug:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+.cp-in{display:flex;align-items:flex-end;gap:8px;padding:10px 14px 14px;border-top:1px solid var(--line);}
+.cp-in textarea{flex:1;resize:none;border:1px solid var(--line-strong);border-radius:10px;background:var(--canvas);padding:10px 12px;font-family:inherit;font-size:12.5px;line-height:1.5;height:42px;max-height:110px;}
+.cp-in textarea:focus{outline:2px solid var(--accent);outline-offset:0;}
+.sendbtn{width:42px;height:42px;border-radius:10px;background:var(--ink);color:#fff;border:none;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .1s;}
+.sendbtn:hover{background:var(--accent);}
+.sendbtn:active{transform:scale(.96);}
+.cp-foot{font-size:9.5px;color:var(--ink-faint);text-align:center;padding:0 14px 10px;font-family:var(--mono);}
+
+/* 채팅 전체 화면 */
+.chatview{flex:1;display:flex;min-height:0;}
+.chat-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.chatbar{display:flex;align-items:center;gap:12px;padding:12px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.72);}
+.chatbar .pchip{display:flex;align-items:center;gap:9px;}
+.chatbar .ava{width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;}
+.chatbar b{font-size:13.5px;display:block;}
+.chatbar span.sub{font-size:10.5px;color:var(--ink-faint);}
+.chats{flex:1;overflow-y:auto;padding:26px 24px;}
+.chats-inner{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:18px;}
+.chat-hero{max-width:640px;padding-top:24px;}
+.chat-hero .ico{width:42px;height:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink-faint);display:flex;align-items:center;justify-content:center;margin-bottom:16px;}
+.chat-hero h2{font-family:var(--serif);font-size:25px;font-weight:600;letter-spacing:-.02em;}
+.chat-hero p{font-size:13px;color:var(--ink-soft);margin-top:8px;max-width:560px;line-height:1.7;}
+.chip-help{display:flex;flex-wrap:wrap;gap-x:16px;gap-y:6px;margin-top:18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:11px 14px;font-size:10.5px;color:var(--ink-soft);}
+.chip-help b{color:var(--ink);}
+.exgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.ex{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:13px 14px;font-size:12.5px;color:var(--ink-soft);line-height:1.5;transition:all .15s;}
+.ex:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+.ex svg{flex-shrink:0;color:var(--ink-faint);}
+.chat-inputbar{flex-shrink:0;border-top:1px solid var(--line);background:var(--surface);padding:14px 24px 18px;}
+.chat-input{max-width:820px;margin:0 auto;border:1px solid var(--line-strong);border-radius:12px;background:var(--canvas);padding:11px 13px;display:flex;align-items:flex-end;gap:10px;}
+.chat-input textarea{flex:1;resize:none;border:none;background:transparent;font-family:inherit;font-size:13px;line-height:1.55;height:24px;max-height:110px;color:var(--ink);}
+.chat-input textarea:focus{outline:none;}
+.chat-hint{max-width:820px;margin:8px auto 0;font-size:10px;color:var(--ink-faint);font-family:var(--mono);display:flex;gap:14px;flex-wrap:wrap;}
+.footer-note{position:fixed;left:72px;right:0;bottom:0;z-index:30;background:var(--amber-bg);border-top:1px solid #EADFC0;padding:6px 14px;font-size:10.5px;color:var(--amber);display:flex;align-items:center;gap:8px;}
+.footer-note b{font-weight:800;}
+@media (max-width:1180px){
+  .s1,.s2,.s3,.s4,.s5{grid-column:span 6;}
+  .c7,.c5,.c4{grid-column:span 12;}
+  .focus .items{grid-template-columns:1fr;}
+  .fitem + .fitem{border-left:none;border-top:1px solid var(--line);}
+  .pipe{flex-direction:column;gap:8px;}
+  .pipe .ptitle{border-right:none;border-bottom:1px solid var(--line);padding-bottom:10px;}
+  .pstage{padding:0;}
+  .pstage .pcard{height:auto;}
+  .parrow{transform:rotate(90deg);align-self:center;padding:2px 0;}
+}
+@media (max-width:760px){
+  .kpis{grid-template-columns:1fr;}
+  .s1,.s2,.s3,.s4,.s5{grid-column:span 1;}
+  .focus .lead{min-width:auto;}
+  .exgrid{grid-template-columns:1fr;}
+  .topmeta .datebox{display:none;}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}
+}
+
+.ic{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+.lvl.b{background:var(--accent-soft);color:var(--accent);}
+.lvl.g{background:var(--green-bg);color:var(--green);}
+.lvl.a{background:var(--amber-bg);color:var(--amber);}
+.lvl.r{background:var(--red-bg);color:var(--red);}
+.lvl.n{background:#F5F5F4;color:var(--ink-soft);}
+.lvl i{font-style:normal;font-family:var(--serif);font-weight:700;font-size:12px;letter-spacing:.02em;}
+.nq{flex-shrink:0;width:27px;height:27px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-faint);display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.nq:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+.toast{position:fixed;left:50%;bottom:64px;transform:translateX(-50%);background:var(--ink);color:#fff;font-size:12px;padding:9px 16px;border-radius:9px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:60;white-space:nowrap;}
+.toast.show{opacity:1;}
+@keyframes flashfade{0%{outline-color:var(--accent)}100%{outline-color:transparent}}
+.flash{outline:2px solid transparent;animation:flashfade 1.4s ease-out 1;}
+.sec-title{display:flex;align-items:center;gap:10px;margin:22px 0 10px;}
+.sec-title .bar{width:3px;height:14px;border-radius:2px;background:var(--accent);}
+.sec-title h2{font-size:12.5px;font-weight:700;letter-spacing:.02em;}
+.sec-title .note{margin-left:auto;font-size:10.5px;color:var(--ink-faint);font-family:var(--mono);}
+.chat-side{width:264px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;}
+.chat-side .sidehead{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line);}
+.chat-side .sidehead img{height:24px;width:auto;}
+.chat-side .sidehead button{width:28px;height:28px;border:none;background:transparent;color:var(--ink-faint);border-radius:7px;display:flex;align-items:center;justify-content:center;}
+.chat-side .sidehead button:hover{background:var(--canvas);color:var(--ink);}
+.pchip2{display:flex;align-items:center;gap:9px;border:1px solid var(--line);background:var(--canvas);border-radius:10px;padding:9px 11px;margin:14px 14px 0;}
+.pchip2 .ava{width:28px;height:28px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-weight:700;font-size:13px;flex-shrink:0;}
+.pchip2 b{font-size:12px;display:block;}
+.pchip2 span{font-size:10px;color:var(--ink-faint);}
+.deptseg{display:flex;gap:6px;margin:12px 14px 0;}
+.deptseg button{flex:1;border:1px solid var(--line);background:var(--canvas);border-radius:8px;padding:7px 2px;font-size:11px;font-weight:700;color:var(--ink-soft);transition:all .12s;}
+.deptseg button.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.sidebtn{display:flex;align-items:center;justify-content:center;gap:7px;margin:12px 14px 0;background:var(--ink);color:#fff;border:none;border-radius:9px;padding:10px;font-size:12.5px;font-weight:700;transition:background .15s;}
+.sidebtn:hover{background:var(--accent);}
+.convs{flex:1;overflow-y:auto;padding:10px 8px;display:flex;flex-direction:column;gap:2px;}
+.conv{display:flex;align-items:center;gap:6px;padding:9px 10px;border-radius:9px;cursor:pointer;font-size:12.5px;color:var(--ink-soft);}
+.conv:hover{background:var(--canvas);color:var(--ink);}
+.conv.on{background:var(--accent-soft);color:var(--accent);font-weight:600;}
+.conv .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.conv .d{font-family:var(--mono);font-size:9.5px;color:var(--ink-faint);}
+.sidefoot{border-top:1px solid var(--line);padding:12px 16px;font-size:11px;line-height:1.5;}
+.sidefoot b{display:block;}
+.sidefoot span{font-family:var(--mono);font-size:10px;color:var(--ink-faint);}
+@media (max-width:900px){.chat-side{display:none;}}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ── 왼쪽 레일 ── -->
+  <aside class="rail">
+    <div class="brand"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAWgAAAFQCAYAAACSzOQVAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6RjkwMDNFQzA1NEJGMTFFREI5MURBMUUxNENEMDcxNEMiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6RjkwMDNFQzE1NEJGMTFFREI5MURBMUUxNENEMDcxNEMiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpGOTAwM0VCRTU0QkYxMUVEQjkxREExRTE0Q0QwNzE0QyIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDpGOTAwM0VCRjU0QkYxMUVEQjkxREExRTE0Q0QwNzE0QyIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PtgqdcsAADl6SURBVHja7J0JeBTF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" alt="신한라이프"></div>
+    <nav>
+      <button class="navbtn active" data-view="dashboard"><span class="ic" data-ic="dash"></span><span>대시보드</span></button>
+      <button class="navbtn" data-view="chat"><span class="ic" data-ic="chat"></span><span>채팅</span></button>
+      <button class="navbtn" data-view="docs"><span class="ic" data-ic="folder"></span><span>자료</span></button>
+      <button class="navbtn" data-view="news"><span class="ic" data-ic="news"></span><span>공시·뉴스</span></button>
+      <button class="navbtn" data-view="settings"><span class="ic" data-ic="gear"></span><span>설정</span></button>
+    </nav>
+    <div class="railfoot">
+      <button class="kq" data-q="이 화면의 대시보드 지표를 한눈에 보기 좋게 요약해 주세요." title="대시보드 질문"></button>
+    </div>
+  </aside>
+
+  <!-- ── 본문 ── -->
+  <div class="main">
+    <header class="topbar">
+      <button class="dept-select" title="부서 선택 (목업)">
+        <span class="ic" data-ic="shield" style="width:15px;height:15px"></span>
+        보험금심사기획팀
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <span class="tag b"><span class="ic" data-ic="bolt" style="width:11px;height:11px"></span>부서장 에이전트 연동</span>
+      <div class="topmeta">
+        <div class="datebox">
+          <b>2026. 9. 3 (목)</b>
+          <span>DATA AS OF 8월 실적 · 9/1 재고</span>
+        </div>
+        <span class="mock-badge">MOCKUP · 예시 데이터</span>
+        <div class="userchip">
+          <span class="ava">김</span>
+          <div class="who"><b>김민지 선임</b><span>claims-planning</span></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ════ 대시보드 ════ -->
+    <section id="view-dashboard" class="view show">
+      <div class="dash">
+        <div class="dash-wrap">
+
+          <!-- 오늘의 집중 -->
+          <div class="focus">
+            <div class="lead">
+              <div>
+                <span class="eyebrow" style="color:#D6D3D1">TODAY · DIRECTION</span>
+                <p class="big">오늘 팀이 집중할<br>방향은 이것입니다.</p>
+              </div>
+              <p class="sub">대시보드는 8월 실적 + 9/1 재고 기준 · 새로고침 09:00</p>
+            </div>
+            <div class="items">
+              <div class="fitem">
+                <div class="row1">
+                  <span class="lvl r"><span class="ic" data-ic="tri"></span></span>
+                  <div><h4>손해율 목표 초과 지속</h4>
+                  <p>8월 누적 82.4% · 목표 79.0% 대비 <b>+3.4%p</b>, 3개월 연속 상승</p></div>
+                </div>
+                <div class="meta">
+                  <span class="tag r">주의 · 원인 분석 착수</span>
+                  <button class="qbtn" data-q="손해율이 목표(79.0%)보다 3.4%p 높습니다. 8월 실적 기준 원인 분석과 대응 방안을 제안해 주세요."><span class="ic" data-ic="q"></span>질문</button>
+                </div>
+              </div>
+              <div class="fitem">
+                <div class="row1">
+                  <span class="lvl b"><span class="ic" data-ic="bolt"></span></span>
+                  <div><h4>AI 자동심사 500만 원 확대 검토</h4>
+                  <p>현행 한도 300만 원 → 500만 원 · 결재안 9/11 제출 예정</p></div>
+                </div>
+                <div class="meta">
+                  <span class="tag b">결재 D-8</span>
+                  <button class="qbtn" data-q="AI 자동심사 한도를 300만 원에서 500만 원으로 확대할 때 리스크와 검증 방법을 검토해 주세요."><span class="ic" data-ic="q"></span>질문</button>
+                </div>
+              </div>
+              <div class="fitem">
+                <div class="row1">
+                  <span class="lvl g"><span class="ic" data-ic="news"></span></span>
+                  <div><h4>금감원 보험사기 특별단속 발표</h4>
+                  <p>하반기 단속 착수 · 신고포상·검사 강화 — 우리 팀 대응 확인 필요</p></div>
+                </div>
+                <div class="meta">
+                  <span class="tag g">오늘의 동향</span>
+                  <button class="qbtn" data-q="금감원의 보험사기 특별단속 발표가 우리 부서 사기 모니터링 업무에 미치는 영향을 요약해 주세요."><span class="ic" data-ic="q"></span>질문</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI -->
+          <div class="sec-title"><span class="bar"></span><h2>핵심 KPI · 8월 실적</h2><span class="note">지급보험금 중심 지표</span></div>
+          <div class="kpis">
+            <div class="kpi s1">
+              <button class="kq" data-q="누적 지급보험금 4,218억 원, 전년 동기 대비 +6.8%입니다. 증가 요인을 검증해 주세요." title="질문하기"></button>
+              <div class="khead"><span class="lvl b"><span class="ic" data-ic="doc"></span></span><h3>누적 지급보험금 (1–8월)</h3></div>
+              <div class="kbody"><span class="num">4,218</span><span class="unit">억 원</span>
+                <svg class="spark" viewBox="0 0 74 24" fill="none"><polyline points="2,20 12,18 22,19 32,14 42,15 52,10 62,11 72,5" stroke="#1F6C9F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="kfoot"><span class="tag g">전년 동기 +6.8%</span><span>월평균 527억</span></div>
+            </div>
+            <div class="kpi s2">
+              <button class="kq" data-q="손해율이 목표(79.0%)보다 3.4%p 높습니다. 8월 실적 기준 원인 분석과 대응 방안을 제안해 주세요." title="질문하기"></button>
+              <div class="khead"><span class="lvl r"><span class="ic" data-ic="tri"></span></span><h3>지급보험금 손해율</h3></div>
+              <div class="kbody"><span class="num">82.4</span><span class="unit">%</span>
+                <span class="tag r">목표 +3.4%p 초과</span>
+              </div>
+              <div class="kbar"><i style="width:82.4%;background:var(--red)"></i><span class="tmark" style="left:79%" title="목표 79.0%"></span></div>
+              <div class="kfoot"><span>목표 79.0% · 6월 80.1% → 8월 82.4%</span></div>
+            </div>
+            <div class="kpi s3">
+              <button class="kq" data-q="8월 청구 처리율이 97.9%입니다. 미처리분과 병목 구간을 검토해 주세요." title="질문하기"></button>
+              <div class="khead"><span class="lvl n"><span class="ic" data-ic="doc"></span></span><h3>8월 청구 처리</h3></div>
+              <div class="kbody"><span class="num">125,902</span><span class="unit">건</span></div>
+              <div class="kfoot"><span class="tag g">처리율 97.9%</span><span>접수 128,540건</span></div>
+            </div>
+            <div class="kpi s4">
+              <button class="kq" data-q="평균 지급 소요일이 3.2일로 목표 5일 이내를 충족합니다. 더 줄일 여지가 있는지 검토해 주세요." title="질문하기"></button>
+              <div class="khead"><span class="lvl g"><span class="ic" data-ic="clock"></span></span><h3>평균 지급 소요</h3></div>
+              <div class="kbody"><span class="num">3.2</span><span class="unit">일</span></div>
+              <div class="kbar"><i style="width:64%"></i><span class="tmark" style="left:100%" title="목표 5.0일"></span></div>
+              <div class="kfoot"><span class="tag g">목표 5일 이내</span><span>전월 3.5일</span></div>
+            </div>
+            <div class="kpi s5">
+              <button class="kq" data-q="보험사기 의심 적발이 214건·37.8억 원인데 전월 대비 12% 줄었습니다. 감소 요인이 실제 개선인지 점검해 주세요." title="질문하기"></button>
+              <div class="khead"><span class="lvl r"><span class="ic" data-ic="shield"></span></span><h3>보험사기 의심 적발</h3></div>
+              <div class="kbody"><span class="num">214</span><span class="unit">건</span></div>
+              <div class="kfoot"><span class="tag a">전월比 -12%</span><span>적발액 37.8억 · 회수 22.5억</span></div>
+            </div>
+          </div>
+
+          <!-- 파이프라인 -->
+          <div class="sec-title"><span class="bar"></span><h2>지급보험금 처리 흐름</h2><span class="note">8월 실적 · 클릭하면 해당 단계 질문</span></div>
+          <div class="pipe">
+            <div class="ptitle">
+              <h3>접수 → 지급</h3>
+              <p>자동심사 비중을 높여 병목(수동심사)을 줄이는 것이 올해 방향입니다.</p>
+            </div>
+            <div class="pstage">
+              <div class="pcard">
+                <div class="ph"><span class="lvl n" style="width:22px;height:22px;border-radius:6px"><span class="ic" data-ic="doc" style="width:12px;height:12px"></span></span>접수
+                  <button class="pq" data-q="8월 청구 접수가 128,540건으로 전월 대비 6.2% 증가했습니다. 접수 급증 요인과 대응 방안을 검토해 주세요." title="질문하기"></button>
+                </div>
+                <div class="pn">128,540<span style="font-size:11px;color:var(--ink-soft)"> 건</span></div>
+                <div class="pd">전월比 <b style="color:var(--red)">+6.2%</b> · 실손·상해 급증</div>
+              </div>
+            </div>
+            <div class="parrow"><span class="ic" data-ic="chev"></span></div>
+            <div class="pstage">
+              <div class="pcard">
+                <div class="ph"><span class="lvl b" style="width:22px;height:22px;border-radius:6px"><span class="ic" data-ic="bolt" style="width:12px;height:12px"></span></span>AI 자동심사
+                  <button class="pq" data-q="AI 자동심사 적용률이 71.3%입니다. 적용률을 80%까지 끌어올리는 방안을 검토해 주세요." title="질문하기"></button>
+                </div>
+                <div class="pn">91,742<span style="font-size:11px;color:var(--ink-soft)"> 건</span></div>
+                <div class="pd">적용률 <b style="color:var(--accent)">71.3%</b> · 절감 약 2.1만 인시</div>
+              </div>
+            </div>
+            <div class="parrow"><span class="ic" data-ic="chev"></span></div>
+            <div class="pstage">
+              <div class="pcard">
+                <div class="ph"><span class="lvl a" style="width:22px;height:22px;border-radius:6px"><span class="ic" data-ic="clock" style="width:12px;height:12px"></span></span>수동심사
+                  <button class="pq" data-q="수동심사 대기 928건 중 기한 초과가 156건입니다. 정리 우선순위와 제도 개선안을 제안해 주세요." title="질문하기"></button>
+                </div>
+                <div class="pn">36,798<span style="font-size:11px;color:var(--ink-soft)"> 건</span></div>
+                <div class="pd">대기 928 · <span style="color:var(--red)">초과 156</span> · 평균 4.1일</div>
+              </div>
+            </div>
+            <div class="parrow"><span class="ic" data-ic="chev"></span></div>
+            <div class="pstage">
+              <div class="pcard">
+                <div class="ph"><span class="lvl g" style="width:22px;height:22px;border-radius:6px"><span class="ic" data-ic="chk" style="width:12px;height:12px"></span></span>지급 확정
+                  <button class="pq" data-q="8월 지급 확정이 125,902건, 누적 4,218억 원입니다. 지급 정확성과 속도를 함께 평가해 주세요." title="질문하기"></button>
+                </div>
+                <div class="pn">125,902<span style="font-size:11px;color:var(--ink-soft)"> 건</span></div>
+                <div class="pd">누적 <b>4,218억 원</b> · 평균 3.2일</div>
+              </div>
+            </div>
+            <div class="parrow"><span class="ic" data-ic="chev"></span></div>
+            <div class="pstage">
+              <div class="pcard">
+                <div class="ph"><span class="lvl r" style="width:22px;height:22px;border-radius:6px"><span class="ic" data-ic="search" style="width:12px;height:12px"></span></span>보류·이의신청
+                  <button class="pq" data-q="지급보류 1,084건, 이의신청 156건 중 처리 기한을 넘긴 156건을 어떻게 정리할지 검토해 주세요." title="질문하기"></button>
+                </div>
+                <div class="pn">1,240<span style="font-size:11px;color:var(--ink-soft)"> 건</span></div>
+                <div class="pd">보류 1,084 · 이의 156<br>기한 초과 <b style="color:var(--red)">156건</b></div>
+              </div>
+            </div>
+          </div>
+          <div class="pflownote">
+            <span class="sum">전체 처리율 97.9% · 미처리 2,638건 → 수동심사 대기 928 + 보류 확인 1,084 + 재검토 214 + 기타 412</span>
+            <button class="qbtn" data-q="파이프라인 전체 흐름에서 병목이 되는 지점을 찾고, 처리율 99% 달성 로드맵을 제안해 주세요."><span class="ic" data-ic="q"></span>흐름 전체 질문</button>
+          </div>
+
+          <!-- 추이 + 큐 -->
+          <div class="row">
+            <div class="card c7">
+              <div class="chead">
+                <span class="lvl n" style="width:26px;height:26px;border-radius:8px"><span class="ic" data-ic="chart"></span></span>
+                <h3>월별 지급보험금 · 손해율 추이</h3>
+                <span class="seg" id="trendSeg">
+                  <button class="on" data-mode="cur">2026년 월간</button>
+                  <button data-mode="yoy">전년 동월 비교</button>
+                </span>
+                <button class="cmore" data-q="지급보험금과 손해율 추이를 보면 6월 이후 손해율이 급등합니다. 원인과 하반기 전망을 분석해 주세요.">이 지표에 대해 더 <span class="ic" data-ic="chev" style="width:11px;height:11px"></span></button>
+              </div>
+              <div class="legend">
+                <span><i style="background:var(--accent)"></i>지급보험금 (억 원)</span>
+                <span><i style="background:#C4C9CE"></i>전년 동월</span>
+                <span><span class="dot" style="background:var(--red)"></span>손해율 (%)</span>
+                <span><span class="dot" style="background:var(--ink-faint)"></span>목표 79.0%</span>
+              </div>
+              <div class="chartbox" id="trendChart"></div>
+            </div>
+
+            <div class="card c5">
+              <div class="chead">
+                <span class="lvl a" style="width:26px;height:26px;border-radius:8px"><span class="ic" data-ic="clock"></span></span>
+                <h3>심사 처리 큐 · 지연 관리</h3>
+                <button class="cmore" data-q="심사 처리 큐의 지연 구간을 점검하고, 기한 초과분을 없애는 실행 계획을 제안해 주세요.">큐 상세 <span class="ic" data-ic="chev" style="width:11px;height:11px"></span></button>
+              </div>
+              <table class="qtable">
+                <tr><th>구분</th><th>건수</th><th style="width:38%">분포</th><th>상태</th></tr>
+                <tr><td>자동심사 대기</td><td class="cnt">0</td><td><div class="bar"><i style="width:0%"></i></div></td><td><span class="tag g">즉시 처리</span></td></tr>
+                <tr><td>수동심사 대기</td><td class="cnt">928</td><td><div class="bar"><i style="width:60%"></i><i class="over" style="width:10%;position:absolute;left:60%"></i></div></td><td><span class="tag a">기한 내 772</span></td></tr>
+                <tr><td>AI 재검토 지적</td><td class="cnt">214</td><td><div class="bar"><i style="width:22%"></i></div></td><td><span class="tag b">재검토 대기</span></td></tr>
+                <tr><td>지급보류 확인</td><td class="cnt">1,084</td><td><div class="bar"><i style="width:70%"></i></div></td><td><span class="tag n">소명 6.5일</span></td></tr>
+                <tr><td>이의신청 접수</td><td class="cnt">98</td><td><div class="bar"><i style="width:13%"></i></div></td><td><span class="tag r">금주 +12</span></td></tr>
+              </table>
+              <div class="planline"><span>8월 처리율 97.9% · 기한 초과 총 <b style="color:var(--red)">156건</b></span><button class="qbtn" data-q="기한 초과 156건을 이번 주 안에 정리하는 실행 계획을 세워 주세요."><span class="ic" data-ic="q"></span>정리안 요청</button></div>
+
+              <div class="chead" style="margin-top:6px">
+                <h3 style="font-size:11.5px;color:var(--ink-soft)">다가오는 마감</h3>
+              </div>
+              <div class="ddlist">
+                <div class="dd">
+                  <div class="dday"><b>9/8</b><span>화 · D-5</span></div>
+                  <div class="dt"><h4>손해율 8월 보고서 제출</h4><p>담당 김민지 · 결재 박 팀장</p></div>
+                  <div class="dstate"><span class="tag a">작성 중</span></div>
+                </div>
+                <div class="dd">
+                  <div class="dday"><b>9/11</b><span>금 · D-8</span></div>
+                  <div class="dt"><h4>AI 자동심사 500만 확대 결재안</h4><p>리스크 검토 · A/B 검증 첨부</p></div>
+                  <div class="dstate"><span class="tag r">검증 필요</span></div>
+                </div>
+                <div class="dd">
+                  <div class="dday"><b>9/15</b><span>화 · D-12</span></div>
+                  <div class="dt"><h4>금융감독원 공시 검토 회의 자료</h4><p>채권·공시 파트 협의</p></div>
+                  <div class="dstate"><span class="tag b">준비 중</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 모니터링 3종 -->
+          <div class="sec-title"><span class="bar"></span><h2>업무 진도 · 모니터링</h2><span class="note">8월 실적 누적</span></div>
+          <div class="row">
+            <div class="card c4">
+              <div class="chead">
+                <span class="lvl b" style="width:26px;height:26px;border-radius:8px"><span class="ic" data-ic="bolt"></span></span>
+                <h3>AI 자동심사 운영</h3>
+                <button class="cmore" data-q="AI 자동심사 적용률 71.3%를 목표 80%까지 끌어올리기 위한 실행 계획을 검토해 주세요.">질문 <span class="ic" data-ic="chev" style="width:11px;height:11px"></span></button>
+              </div>
+              <div class="metriccell">
+                <div class="metricrow">
+                  <div class="gauge">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);margin-bottom:5px"><span>적용률</span><span>목표 80%</span></div>
+                    <div class="kbar"><i style="width:71.3%"></i><span class="tmark" style="left:80%"></span></div>
+                  </div>
+                  <div class="gv"><span class="big-num">71.3<small>%</small></span></div>
+                </div>
+                <div class="planline"><span>자동 지급 91,742건 · 정확도 99.6%</span><span class="tag b">재검토율 6.2%</span></div>
+              </div>
+              <div class="mlist">
+                <div class="mitem"><span class="mb" style="background:var(--accent)"></span><div>현행: <b>300만 원 이하</b> 자동심사 전수 스크리닝 — 고액·비정형은 수동 전환</div></div>
+                <div class="mitem"><span class="mb" style="background:var(--amber)"></span><div>확대 검토: <b>500만 원</b> — 샘플 3,000건 A/B 검증 진행 (9/11 결재안)</div></div>
+                <div class="mitem"><span class="mb" style="background:var(--green)"></span><div>CTR: 지급 오류 <b>0.4%</b> (업계 평균 1.1%) — 정확성 양호</div></div>
+              </div>
+            </div>
+
+            <div class="card c4">
+              <div class="chead">
+                <span class="lvl g" style="width:26px;height:26px;border-radius:8px"><span class="ic" data-ic="chk"></span></span>
+                <h3>품질 점검 (샘플링 13%)</h3>
+                <button class="cmore" data-q="8월 품질 점검 결과 지적 156건의 패턴을 분석하고, 재발 방지 대책을 제안해 주세요.">질문 <span class="ic" data-ic="chev" style="width:11px;height:11px"></span></button>
+              </div>
+              <div class="metriccell">
+                <div class="metricrow">
+                  <div class="gauge">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);margin-bottom:5px"><span>8월 샘플 검토 완료</span><span>표본 16,710건</span></div>
+                    <div class="kbar"><i style="width:92%;background:var(--green)"></i></div>
+                  </div>
+                  <div class="gv"><span class="big-num">92<small>%</small></span></div>
+                </div>
+                <div class="planline"><span>지적 <b style="color:var(--red)">156건</b> · 시정 완료 132건</span><span class="tag g">미시정 24건</span></div>
+              </div>
+              <div class="mlist">
+                <div class="mitem"><span class="mb" style="background:var(--red)"></span><div><b>조서·약관 확인 누락 58건</b> — 자동심사 통과 건 중심</div></div>
+                <div class="mitem"><span class="mb" style="background:var(--amber)"></span><div>지급한도 재검토 누락 <b>41건</b> — 300만 원 근접 건 집중</div></div>
+                <div class="mitem"><span class="mb" style="background:var(--ink-faint)"></span><div>서류 보완 지연 <b>33건</b> + 기타 24건</div></div>
+              </div>
+            </div>
+
+            <div class="card c4">
+              <div class="chead">
+                <span class="lvl r" style="width:26px;height:26px;border-radius:8px"><span class="ic" data-ic="shield"></span></span>
+                <h3>보험사기 모니터링</h3>
+                <button class="cmore" data-q="보험사기 의심 214건을 유형별로 나눠 대응 우선순위를 제안해 주세요.">질문 <span class="ic" data-ic="chev" style="width:11px;height:11px"></span></button>
+              </div>
+              <div class="metriccell">
+                <div class="metricrow">
+                  <div class="gauge">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink-soft);margin-bottom:5px"><span>적발 금액</span><span>전월比 -12%</span></div>
+                    <div class="kbar"><i style="width:100%;background:var(--red)"></i></div>
+                  </div>
+                  <div class="gv"><span class="big-num">37.8<small>억</small></span></div>
+                </div>
+                <div class="planline"><span>의심 건 <b>214건</b> · 회수 진행 22.5억</span><span class="tag r">금감원 통보 3건</span></div>
+              </div>
+              <div class="mlist">
+                <div class="mitem"><span class="mb" style="background:var(--red)"></span><div>집중 유형: 계약 전 알릴 의무 위반 <b>38%</b> · 허위·위조 서류 27%</div></div>
+                <div class="mitem"><span class="mb" style="background:var(--amber)"></span><div>면책사유 다빈도 <b>21%</b> — 병원·설계사 연루 정밀 분석 중</div></div>
+                <div class="mitem"><span class="mb" style="background:var(--accent)"></span><div>금감원 9/3 특별단속 발표 → 의심 건 연계 대응 확인</div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 뉴스/공시 + 대시보드 연동 채팅 -->
+          <div class="row" style="align-items:stretch">
+            <div class="card c5">
+              <div class="chead">
+                <span class="lvl n" style="width:26px;height:26px;border-radius:8px"><span class="ic" data-ic="news"></span></span>
+                <h3>금감원 공시 · 오늘의 보험뉴스</h3>
+                <div class="news-tabs">
+                  <button class="on" data-news="fss">금감원 공시</button>
+                  <button data-news="news">보험 뉴스</button>
+                </div>
+              </div>
+              <div class="newslist" id="newsFss">
+                <div class="nitem">
+                  <span class="ndate">09.02</span>
+                  <div class="nc"><h4>보험업감독규정 개정예고 — 보험사기 예방·대응 체계 강화</h4><p>규정개정예고 · 의견수렴 기간 중</p></div>
+                  <button class="nq" data-q="보험업감독규정 개정예고(보험사기 예방·대응 체계 강화)가 우리 부서에 주는 시사점을 정리해 주세요." title="질문하기"></button>
+                </div>
+                <div class="nitem">
+                  <span class="ndate">09.01</span>
+                  <div class="nc"><h4>2026년 상반기 보험회사 경영실태 평가 결과 공개</h4><p>지급여력·건전성 부문 우리 회사 순위 확인 필요</p></div>
+                  <button class="nq" data-q="상반기 경영실태 평가에서 건전성 지표가 우리 부서 손해율 목표 관리와 어떻게 연결되는지 설명해 주세요." title="질문하기"></button>
+                </div>
+                <div class="nitem">
+                  <span class="ndate">08.28</span>
+                  <div class="nc"><h4>금융소비자보호 우수사례 공모 안내 (~9/15)</h4><p>신속 지급·소통 개선 사례 제출 검토 가능</p></div>
+                  <button class="nq" data-q="금융소비자보호 우수사례 공모에 낼 만한 우리 팀 사례를 제안해 주세요." title="질문하기"></button>
+                </div>
+                <div class="nitem">
+                  <span class="ndate">08.21</span>
+                  <div class="nc"><h4>보험상품 비교공시 확대 방안 (의견수렴)</h4><p>비교 대상 상품군 확대 — 지급 기준 설명 강화 영향</p></div>
+                  <button class="nq" data-q="보험상품 비교공시 확대가 지급보험금 안내·공시 업무에 미치는 영향을 검토해 주세요." title="질문하기"></button>
+                </div>
+              </div>
+              <div class="newslist hidden" id="newsList">
+                <div class="nitem">
+                  <span class="ndate">09.03</span>
+                  <div class="nc"><h4>금감원, 하반기 보험사기 특별단속… 병원·설계사 연루 정밀 분석</h4><p>신고포상 확대 · 검사 착수 통보 — 오늘자</p></div>
+                  <button class="nq" data-q="금감원의 보험사기 특별단속 발표가 우리 부서 모니터링 업무에 미치는 영향을 요약해 주세요." title="질문하기"></button>
+                </div>
+                <div class="nitem">
+                  <span class="ndate">09.02</span>
+                  <div class="nc"><h4>실손보험 손해율 악화 지속… 보험업계 요율·보장 조정 본격화</h4><p>실손 청구 급증과 우리 팀 접수 +6.2% 연관 가능성</p></div>
+                  <button class="nq" data-q="실손보험 손해율 악화 보도와 우리 부서 8월 청구 급증(+6.2%)의 연관성을 분석해 주세요." title="질문하기"></button>
+                </div>
+                <div class="nitem">
+                  <span class="ndate">09.01</span>
+                  <div class="nc"><h4>AI 보험심사 확산… 금감원 “투명성·오류 책임” 가이드라인 마련</h4><p>자동심사 확대 시 규제 기준 사전 점검 필요</p></div>
+                  <button class="nq" data-q="금감원 AI 보험심사 가이드라인 동향에 맞춰 자동심사 500만 원 확대안을 보완할 항목을 검토해 주세요." title="질문하기"></button>
+                </div>
+                <div class="nitem">
+                  <span class="ndate">08.29</span>
+                  <div class="nc"><h4>보험사기 신고포상금 지급액, 전년 대비 34% 증가</h4><p>내부 신고 채널 활성화 캠페인 참고</p></div>
+                  <button class="nq" data-q="보험사기 신고포상 증가 동향에 맞춰 내부 신고 채널 운영 방안을 제안해 주세요." title="질문하기"></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 대시보드 연동 채팅 -->
+            <div class="c7" style="min-width:0">
+              <div class="chatpanel">
+                <div class="cp-head">
+                  <div class="pchip">
+                    <span class="ava">심</span>
+                    <div><b>보험금심사기획 부서장</b><span>대시보드 데이터를 근거로 검증·조언합니다</span></div>
+                  </div>
+                  <button class="ctx-toggle on" id="ctxToggle" title="대시보드 컨텍스트">
+                    <span class="dot"></span>대시보드 컨텍스트
+                  </button>
+                  <button class="kq" data-q="대시보드 화면 전체를 설명해 주세요." title="질문하기" style="position:static">
+                  </button>
+                </div>
+                <div class="ctxbar" id="ctxBar">
+                  <b>대시보드 참조:</b>
+                  <span class="tag b">8월 실적 · 2026</span><span class="tag n">누적 지급 4,218억</span><span class="tag r">손해율 82.4%</span><span class="tag b">AI 적용 71.3%</span><span class="tag a">초과 156건</span>
+                  <span style="margin-left:auto;color:var(--accent)">9/3 09:00 갱신</span>
+                </div>
+                <div class="cp-msgs" id="cpMsgs">
+                  <div class="msg user">
+                    <span class="who">팀원 · 09:12</span>
+                    <div class="bubble">8월 손해율 82.4% — 목표 79%보다 3.4%p 높아. 지금 상황을 한 줄로 요약해 줘.</div>
+                  </div>
+                  <div class="msg assistant">
+                    <span class="who">부서장 · 09:12</span>
+                    <div class="bubble">8월 누적 손해율 <b>82.4%</b>(목표 79.0% 대비 <b>+3.4%p</b>, 3개월 연속 상승)로 <b>통제 필요 구간</b>입니다. 원인은 ①실손·상해 청구 급증(+6.2%) ②1건당 평균 지급액 +4.1% ③조서 누락 등 품질 지적 156건이 복합된 것으로 보입니다. 오늘은 9/8 손해율 보고서에 원인 분해 분석을 우선 반영하세요.</div>
+                    <div class="refs"><span class="ref">대시보드 · 손해율 추이</span><span class="ref">8월 품질 점검</span></div>
+                  </div>
+                </div>
+                <div class="cp-sugs" id="cpSugs">
+                  <button class="sug" data-send>손해율 +3.4%p 원인 분석</button>
+                  <button class="sug" data-send>AI 한도 500만 확대 리스크</button>
+                  <button class="sug" data-send>기한 초과 156건 정리 방안</button>
+                  <button class="sug" data-send>오늘 공시·뉴스 영향 요약</button>
+                </div>
+                <div class="cp-in">
+                  <textarea id="cpInput" rows="1" placeholder="대시보드 지표에 대해 질문하세요 — 예) “손해율 원인을 분석해 줘”"></textarea>
+                  <button class="sendbtn" id="cpSend" title="전송"><span class="ic" data-ic="send"></span></button>
+                </div>
+                <div class="cp-foot">목업: 답변은 대시보드 데이터 기반 예시 · 전체 채팅은 좌측 레일 [채팅]에서</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════ 채팅 전체 화면 (기존 UI 유지 + 대시보드 연동) ════ -->
+    <section id="view-chat" class="view">
+      <div class="chatview">
+        <aside class="chat-side">
+          <div class="sidehead">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAAA8CAYAAADc3IdaAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MUQ5QkVDQkI1NEMwMTFFRDk4QURFNjM3NkI0RkYwQkQiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MUQ5QkVDQkM1NEMwMTFFRDk4QURFNjM3NkI0RkYwQkQiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoxRDlCRUNCOTU0QzAxMUVEOThBREU2Mzc2QjRGRjBCRCIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDoxRDlCRUNCQTU0QzAxMUVEOThBREU2Mzc2QjRGRjBCRCIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/Pn80bEYAABhBSURBVHja7F0HmBRF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" alt="신한라이프">
+            <button class="kq" data-q="이 채팅 화면의 사용법을 알려 주세요." title="도움말"></button>
+          </div>
+          <div class="pchip2">
+            <span class="ava">심</span>
+            <div><b>보험금심사기획 부서장</b><span>검증 · 조언 · 아이디어</span></div>
+          </div>
+          <div class="deptseg">
+            <button class="on">보험금심사</button>
+            <button>계리</button>
+          </div>
+          <button class="sidebtn"><span class="ic" data-ic="plus"></span>새 대화</button>
+          <div class="convs">
+            <div class="conv on"><span class="ic" data-ic="chat" style="width:14px;height:14px"></span><span class="t">손해율 상승 원인 분석 · 8월</span><span class="d">오늘</span></div>
+            <div class="conv"><span class="ic" data-ic="chat" style="width:14px;height:14px"></span><span class="t">AI 자동심사 500만 확대 리스크</span><span class="d">어제</span></div>
+            <div class="conv"><span class="ic" data-ic="chat" style="width:14px;height:14px"></span><span class="t">8월 품질 점검 결과 검토</span><span class="d">8/31</span></div>
+            <div class="conv"><span class="ic" data-ic="chat" style="width:14px;height:14px"></span><span class="t">금감원 공시 대응 정리</span><span class="d">8/28</span></div>
+            <div class="conv"><span class="ic" data-ic="chat" style="width:14px;height:14px"></span><span class="t">보류 156건 우선순위</span><span class="d">8/27</span></div>
+            <div class="conv"><span class="ic" data-ic="chat" style="width:14px;height:14px"></span><span class="t">手손해율 보고서 구조 검토</span><span class="d">8/25</span></div>
+          </div>
+          <div class="sidefoot"><b>kim.mj@shinhan.com</b><span>보험금심사기획팀 · 구성원</span></div>
+        </aside>
+
+        <div class="chat-main">
+          <div class="chatbar">
+            <div class="pchip">
+              <span class="ava">심</span>
+              <div><b>보험금심사기획 부서장</b><span id="cvSub">업무 시 미리 검증 · 조언 · 결정 프로세스를 경험해 보세요!</span></div>
+            </div>
+            <span class="tag g" style="margin-left:auto"><span class="ic" data-ic="chk" style="width:11px;height:11px"></span>자료 근거 기반</span>
+            <span class="tag n">생각 · high</span>
+            <span class="tag b"><span class="ic" data-ic="bolt" style="width:11px;height:11px"></span>대시보드 연동</span>
+          </div>
+
+          <div class="chats">
+            <div class="chats-inner" id="cvMsgs">
+              <div class="chat-hero" id="cvHero">
+                <div class="ico"><span class="ic" data-ic="chat"></span></div>
+                <h2>무슨 일을 검토받고 싶으신가요?</h2>
+                <p>왼쪽 [대시보드]의 지표를 근거로 질문할 수도 있고, 업무 질문만으로도 부서장의 의견을 받을 수 있습니다. 대시보드가 연결되면 지급보험금 KPI · 업무 진도 · 공시/뉴스까지 컨텍스트로 참고해 답변합니다.</p>
+                <div class="chip-help">
+                  <span><b>/ 슬래시 명령</b> 스킬·새 대화·생각 수준</span>
+                  <span><b>@ 파일</b> 내 자료 첨부</span>
+                  <span><b>Drag&amp;Drop</b> 파일 업로드</span>
+                  <span><b>진행 패널</b> 도구·추론 과정 확인</span>
+                </div>
+                <p class="eyebrow" style="margin-top:20px">아래 질문 예시로 시작해 보세요</p>
+                <div class="exgrid" id="cvEx">
+                  <button class="ex" data-chip="지급보험금 손해율이 계획 대비 5% 넘어 원인 분석 방법을 제안해 주세요.">원인 분석 방법 제안<span class="ic" data-ic="chev" style="width:12px;height:12px"></span></button>
+                  <button class="ex" data-chip="AI 자동심사 도입 시 리스크를 짚어 주세요.">AI 자동심사 도입 리스크 검토<span class="ic" data-ic="chev" style="width:12px;height:12px"></span></button>
+                  <button class="ex" data-chip="지급보험금 품질 점검 샘플링(13%) 기준 항목 검토를 제안해 주세요.">품질 점검 샘플링(13%) 기준 검토<span class="ic" data-ic="chev" style="width:12px;height:12px"></span></button>
+                  <button class="ex" data-chip="청구 자동심사(300만 원 이하) 대상 확대 여부 점검을 검토해 주세요.">자동심사 300만 원 대상 확대 점검<span class="ic" data-ic="chev" style="width:12px;height:12px"></span></button>
+                  <button class="ex" data-chip="신상품 보험금 리스크(역선택·손해율) 사전 검토안을 검토해 주세요.">신상품 보험금 리스크 사전 검토안<span class="ic" data-ic="chev" style="width:12px;height:12px"></span></button>
+                  <button class="ex" data-chip="오늘의 금감원 공시와 보험 뉴스 중 우리 팀이 확인해야 할 것을 정리해 주세요.">오늘의 공시·뉴스 요약<span class="ic" data-ic="chev" style="width:12px;height:12px"></span></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chat-inputbar">
+            <div class="chat-input">
+              <textarea id="cvInput" rows="1" placeholder="업무 질문이나 /슬래시 명령을 입력하세요 — 대시보드 지표와 연동됩니다"></textarea>
+              <button class="sendbtn" id="cvSend"><span class="ic" data-ic="send"></span></button>
+            </div>
+            <div class="chat-hint">
+              <span>대시보드 8월 실적 자동 참조 ON → 지표 질문은 값이 함께 전달됩니다</span>
+              <span>/웹검색 · /자료 · /새대화 · /생각</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="footer-note"><b>MOCKUP</b> — 목업 화면입니다. 표시된 수치는 예시 데이터이며 실제 업무 데이터와 다릅니다. 승인 후 실제 화면 개발에 반영합니다.</div>
+<div class="toast" id="toast"></div>
+
+
+<script>
+
+const ICONS = {
+  q: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 1 1 4 1.9c-.9.6-1.4 1.1-1.4 2.2v.6"/><path d="M12 16.9v.1"/></svg>',
+  dash: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></svg>',
+  chat: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5M12 3a9 9 0 0 1 9 9c0 4.42-3.58 8-8 8-1 0-2-.2-2.9-.6L4 20l1.3-3.5A8.9 8.9 0 0 1 3 12a9 9 0 0 1 9-9Z"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>',
+  news: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4Z"/><path d="M9 4h6v5H9zM9 13h6M9 16h4"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h5M13 17h7"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="17" r="2"/></svg>',
+  send: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  tri: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3l9-16Z"/><path d="M12 10v4M12 17v.1"/></svg>',
+  chk: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/></svg>',
+  chart: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 3 3 7-8"/><path d="M14 7h5v5"/></svg>',
+  search: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.4-3 7.6-7 9-4-1.4-7-4.6-7-9V6l7-3Z"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6V3Z"/><path d="M14 3v4h4M9 12h6M9 15h6M9 9h2"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
+  bolt: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3L5 13h6l-1 8 8-10h-6l1-8Z"/></svg>',
+  logout: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M9 16l-4-4 4-4M5 12h11"/></svg>',
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* 아이콘 주입 */
+document.querySelectorAll('[data-ic]').forEach(el => el.innerHTML = ICONS[el.dataset.ic]);
+$$('.kq, .nq, .pq').forEach(el => el.innerHTML = ICONS.q);
+$$('.railfoot .kq').forEach(el => el.style.width = '44px');
+
+let toastTimer;
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* 뷰 전환 */
+$$('.navbtn').forEach(b => b.addEventListener('click', () => {
+  const v = b.dataset.view;
+  if (v === 'docs' || v === 'settings' || v === 'news') { toast('목업 범위 밖 — 확정 후 개발 예정입니다'); return; }
+  setView(v);
+}));
+function setView(v){
+  $$('.view').forEach(x => x.classList.remove('show'));
+  $$('.navbtn').forEach(x => x.classList.toggle('active', x.dataset.view === v));
+  if (v === 'dashboard') $('#view-dashboard').classList.add('show');
+  else if (v === 'chat') $('#view-chat').classList.add('show');
+}
+
+/* 대시보드 Q 버튼 → 채팅 패널 질문 채우기 */
+function flash(el){ el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+function fillQuestion(q){
+  setView('dashboard');
+  const ta = $('#cpInput');
+  ta.value = q; ta.focus(); flash(ta); resizeTxt(ta);
+  const panel = $('.chatpanel');
+  if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+document.addEventListener('click', e => {
+  const qb = e.target.closest('[data-q]');
+  if (qb) fillQuestion(qb.dataset.q);
+});
+$('.dept-select').addEventListener('click', () => toast('부서 선택은 실제 개발 후 제공됩니다'));
+
+/* 뉴스 탭 */
+$$('.news-tabs button').forEach(b => b.addEventListener('click', () => {
+  $$('.news-tabs button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  $('#newsFss').classList.toggle('hidden', b.dataset.news !== 'fss');
+  $('#newsList').classList.toggle('hidden', b.dataset.news !== 'news');
+}));
+
+/* 대시보드 컨텍스트 토글 */
+$('#ctxToggle').addEventListener('click', () => {
+  $('#ctxToggle').classList.toggle('on');
+  $('#ctxBar').classList.toggle('hidden');
+});
+
+/* 차트 */
+function drawTrend(){
+  const curA  = [480,488,512,520,535,541,558,584];
+  const yoyA  = [462,466,470,474,478,482,489,495];
+  const loss  = [78.9,79.4,79.8,80.1,80.6,81.5,82.0,82.4];
+  const months= ['1월','2월','3월','4월','5월','6월','7월','8월'];
+  const W=640, H=225, L=34, R=34, T=12, B=24;
+  const iw=W-L-R, ih=H-T-B;
+  const yBar = v => T+ih-(v/620)*ih;
+  const yLoss= v => T+ih-((v-72)/(88-72))*ih;
+  const xm = i => L + i*(iw/7);
+  let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+  s += `<line x1="${L}" y1="${yBar(0)}" x2="${L+iw}" y2="${yBar(0)}" stroke="#E7E5E4"/>`;
+  [200,400,600].forEach(v=> s+=`<line x1="${L}" y1="${yBar(v)}" x2="${L+iw}" y2="${yBar(v)}" stroke="#F0EFED"/><text x="${L-8}" y="${yBar(v)+4}" text-anchor="end" font-size="9" fill="#A8A29E" font-family="var(--mono)">${v}</text>`);
+  [74,78,82,86].forEach(v=> s+=`<text x="${L+iw+8}" y="${yLoss(v)+4}" font-size="9" fill="#A8A29E">${v}%</text>`);
+  s += `<text x="${L-8}" y="${T+4}" font-size="9" fill="#A8A29E" text-anchor="end">억 원</text>`;
+  // 목표선 (손해율 79)
+  s += `<line x1="${L}" y1="${yLoss(79)}" x2="${L+iw}" y2="${yLoss(79)}" stroke="#A8A29E" stroke-dasharray="4 4"/><text x="${L+iw}" y="${yLoss(79)-5}" text-anchor="end" font-size="9" fill="#A8A29E">목표 79.0%</text>`;
+  // 전년 동월 막대 (yoy 모드에서만)
+  const grp = Math.min(iw/7/2, 26);
+  s += `<g id="yoyBars" opacity="0">`;
+  yoyA.forEach((v,i)=>{ const x=xm(i)-grp-2; s+=`<rect x="${x}" y="${yBar(v)}" width="${grp}" height="${T+ih-yBar(v)}" fill="#C4C9CE" rx="2"/>`; });
+  s += `</g>`;
+  // 당월 막대
+  s += `<g id="curBars">`;
+  curA.forEach((v,i)=>{ const x=xm(i)-(i>0?0:0)-grp/2+ (i>0? -1:0); s+=`<rect x="${xm(i)-grp/2+1}" y="${yBar(v)}" width="${grp}" height="${T+ih-yBar(v)}" fill="#1F6C9F" rx="2" opacity="0.92"/>`; });
+  s += `</g>`;
+  // 손해율 선
+  s += `<polyline points="${loss.map((v,i)=>`${xm(i)},${yLoss(v)}`).join(' ')}" fill="none" stroke="#9F2F2D" stroke-width="2" stroke-linejoin="round"/>`;
+  loss.forEach((v,i)=>{ s+=`<circle cx="${xm(i)}" cy="${yLoss(v)}" r="2.6" fill="#fff" stroke="#9F2F2D" stroke-width="1.8"/>`; });
+  // 마지막 점 값 라벨
+  s += `<text x="${xm(7)}" y="${yLoss(82.4)-8}" text-anchor="middle" font-size="10" font-weight="700" fill="#9F2F2D" font-family="var(--serif)">82.4%</text>`;
+  months.forEach((m,i)=> s+=`<text x="${xm(i)}" y="${T+ih+16}" text-anchor="middle" font-size="9.5" fill="#78716C" font-family="var(--mono)">${m}</text>`);
+  s += `</svg>`;
+  $('#trendChart').innerHTML = s;
+  const yoyG = $('#trendChart').querySelector('#yoyBars');
+  const curG = $('#trendChart').querySelector('#curBars');
+  let yoy=false;
+  function apply(){ yoyG.setAttribute('opacity', yoy?'1':'0'); if(yoy){ curG.setAttribute('opacity','0.45'); } else { curG.setAttribute('opacity','0.92'); } }
+  $("#trendSeg").querySelectorAll('button').forEach(b=> b.addEventListener('click',()=>{
+    $("#trendSeg").querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); yoy = b.dataset.mode==='yoy'; apply();
+  }));
+}
+drawTrend();
+
+/* ── 부서장 예시 답변 (대시보드 데이터 기반 목업) ── */
+const REFS = {
+  loss:  ['대시보드 · 손해율 추이','8월 품질 점검 · 한도 재검토 41건'],
+  ai:    ['대시보드 · AI 자동심사 71.3%','품질 점검 · 재검토율 6.2%'],
+  queue: ['대시보드 · 수동심사 928건','9/8 손해율 보고서 마감'],
+  news:  ['공시 · 보험업감독규정 개정예고','뉴스 · 금감원 특별단속 9/3'],
+  fraud: ['대시보드 · 사기 의심 214건','뉴스 · 특별단속 발표'],
+  all:   ['대시보드 · 8월 실적 스냅숏'],
+};
+function answerFor(t){
+  if(/손해율|원인|증가|3\.4/.test(t))
+    return { text:'8월 누적 손해율 <b>82.4%</b>(목표 79.0% 대비 <b>+3.4%p</b>)는 ①실손·상해 청구 급증(+6.2%) ②1건당 평균 지급액 <b>+4.1%</b> ③조서 누락 등 품질 지적 156건이 복합된 결과입니다.<br><br><b>① 검증 의견</b> — 지급액 증가를 \'청구 건수 · 건당 단가 · 품질\' 3요인으로 분해해 기여도를 확인하는 것을 추천합니다.<br><b>② 조언</b> — 자동심사 재검토율 6.2%는 정상이나, 300만 원 근접 건의 한도 재검토 누락(41건)이 손해율을 키울 수 있어 수동 확인을 강화하세요.<br><b>③ 다음 단계</b> — 9/8 손해율 보고서에 요인별 기여도 표를 넣고, 자동심사 로직에 \'근접 한도 스크리닝\'을 추가하는 안을 9/11 결재안에 포함하세요.', refs: REFS.loss };
+  if(/AI|자동심사|500|확대|한도/i.test(t))
+    return { text:'AI 자동심사 적용률은 <b>71.3%</b>(목표 80%), 재검토율 6.2%, 정확도 99.6%로 확대 기본 조건은 충족합니다.<br><br><b>① 검증 의견</b> — 현행 300만 원 한도 아래 청구가 전체의 약 71%입니다. 500만 원 확대 시 추가 자동화 대상은 약 4.2만 건으로 추정되며, 고액 구간은 허위·위조 서류 비중이 높아 별도 스크리닝이 필요합니다.<br><b>② 조언</b> — 확대 전 샘플 3,000건 A/B 검증(오차율·재검토율 기준)을 완료하고, 300만–500만 원 구간은 \'자동 1차 + 사람 확인\' 하이브리드로 1개월간 시범 운영을 권합니다.<br><b>③ 다음 단계</b> — 9/11 결재안에 A/B 검증 결과 + 금감원 AI 심사 가이드라인 대응 항목을 넣어 제출하세요.', refs: REFS.ai };
+  if(/보류|초과|큐|지연|정리|우선순위|156/.test(t))
+    return { text:'지연 자산은 수동심사 대기 928건 중 기한 초과 <b>156건</b>, 보류 확인 1,084건, AI 재검토 214건입니다.<br><br><b>① 검증 의견</b> — 초과분 156건은 7월 중순 이후 접수 건이 대부분입니다(평균 지연 6.5일). 단가가 작은 실손 중심이라 미지급 이자 노출은 제한적입니다.<br><b>② 조언</b> — 정리 순서는 ①지연 장기화 건(15일 이상) ②금액 상위 20건 ③9/8 보고서 포함 건 순으로 하고, 주간 정리 태스크를 배정하세요.<br><b>③ 다음 단계</b> — 수동심사 1건당 소요시간을 측정해 한도 분류를 조정하고, 초과분이 2주 연속 50건 미만이 되면 자동심사 확대 근거로 활용하세요.', refs: REFS.queue };
+  if(/공시|뉴스|금감원|특별단속|보도|동향|영향/.test(t))
+    return { text:'오늘 확인할 외부 동향은 3가지입니다.<br>① <b>금감원 하반기 보험사기 특별단속 발표(9/3)</b> — 병원·설계사 연루 정밀 분석으로 사기 모니터링 의심 214건 중 병원 연루 정황 건을 3건 금감원에 통보한 상태입니다.<br>② <b>실손보험 손해율 악화 보도</b> — 우리 부서 8월 접수 +6.2% 급증과 연관 가능성이 높아 요율·보장 조정 동향을 주시하세요.<br>③ <b>보험업감독규정 개정예고</b>(사기 예방·대응 체계) — 자동심사 확대 결재안에 규정 대응 항목을 반영해야 합니다.<br><br><b>권고</b>: 오늘 팀 미팅에서 사기 연계 대응과 실손 급증 원인을 함께 안건으로 올리는 것을 추천합니다.', refs: REFS.news };
+  if(/사기|적발|특별단속|모니터링/.test(t))
+    return { text:'보험사기 의심은 <b>214건 · 37.8억 원</b>, 전월 대비 -12%로 수치상 개선됐습니다.<br><br><b>① 검증 의견</b> — 감소분의 상당 부분은 7월 대량 적발 후 신규 유입이 줄어든 \'긍정적 사유\'와, AI 로직 변경으로 사전 차단이 늘어난 효과가 섞여 있습니다.<br><b>② 조언</b> — 단순 감소가 아닌 \'적발→차단→회수\'로 구분해 지표를 재구성하고, 면책사유 다빈도(21%)·허위 서류(27%) 구간의 정밀 분석을 확대하세요.<br><b>③ 다음 단계</b> — 금감원 9/3 특별단속 발표를 계기로 의심 건 214건의 병원·설계사 연루 정황을 전수 점검하고, 9/11 결재안에 대응체계를 포함하세요.', refs: REFS.fraud };
+  return { text:'대시보드 기준 8월 현황은 다음과 같습니다.<br>· 누적 지급보험금 <b>4,218억 원</b>(전년 동기 +6.8%) · 손해율 <b>82.4%</b>(목표 79.0% 대비 +3.4%p 초과)<br>· 처리율 97.9% · 평균 지급 소요 3.2일 · AI 자동심사 적용률 71.3%<br>· 보험사기 의심 214건 · 37.8억 원<br><br>오늘 집중 안건은 ①손해율 원인 분석(9/8 보고서) ②AI 자동심사 500만 원 확대 결재안(9/11) ③금감원 특별단속 대응입니다. 어느 것부터 자세히 볼까요?', refs: REFS.all };
+}
+
+/* ── 채팅 렌더링 헬퍼 ── */
+function addMsg(containerId, role, html, refs){
+  const c = $(containerId);
+  const m = document.createElement('div');
+  m.className = 'msg ' + role;
+  const who = role==='user' ? '팀원' : '부서장';
+  const time = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  let inner = `<span class="who">${who} · ${time}</span><div class="bubble">${html}</div>`;
+  if(refs && refs.length) inner += `<div class="refs">${refs.map(r=>`<span class="ref">${r}</span>`).join('')}</div>`;
+  m.innerHTML = inner;
+  c.appendChild(m);
+  c.scrollTop = c.scrollHeight;
+}
+function addTyping(containerId){
+  const c = $(containerId);
+  const t = document.createElement('div');
+  t.className = 'typing';
+  t.innerHTML = '<i></i><i></i><i></i>';
+  c.appendChild(t); c.scrollTop = c.scrollHeight;
+  return t;
+}
+function resizeTxt(el){
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight, 110)+'px';
+}
+
+/* 대시보드 채팅 패널 전송 */
+let panelBusy=false;
+async function panelSend(textOverride){
+  const ta=$('#cpInput');
+  const text=(textOverride ?? ta.value).trim();
+  if(!text||panelBusy) return;
+  ta.value=''; resizeTxt(ta);
+  addMsg('#cpMsgs','user', text.replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+  const t=addTyping('#cpMsgs');
+  panelBusy=true;
+  await sleep(850);
+  t.remove();
+  const a=answerFor(text);
+  addMsg('#cpMsgs','assistant', a.text, a.refs);
+  panelBusy=false;
+}
+$('#cpSend').addEventListener('click',()=>panelSend());
+$('#cpInput').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();panelSend();} });
+$('#cpInput').addEventListener('input',e=>resizeTxt(e.target));
+$$('#cpSugs .sug').forEach(s=>s.addEventListener('click',()=>panelSend(s.textContent.trim())));
+
+/* 캔버스 탭 채팅 전체 화면 전송 */
+let cvStarted=false;
+let cvBusy=false;
+async function cvSend(textOverride){
+  const ta=$('#cvInput');
+  const text=(textOverride ?? ta.value).trim();
+  if(!text||cvBusy) return;
+  ta.value=''; resizeTxt(ta);
+  if(!cvStarted){ cvStarted=true; $('#cvHero').classList.add('hidden'); }
+  addMsg('#cvMsgs','user', text.replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+  const t=addTyping('#cvMsgs');
+  cvBusy=true;
+  await sleep(950);
+  t.remove();
+  const a=answerFor(text);
+  addMsg('#cvMsgs','assistant', a.text, a.refs);
+  cvBusy=false;
+}
+$('#cvSend').addEventListener('click',()=>cvSend());
+$('#cvInput').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();cvSend();} });
+$('#cvInput').addEventListener('input',e=>resizeTxt(e.target));
+$$('#cvEx .ex').forEach(x=>x.addEventListener('click',()=>{ setView('chat'); $('#cvInput').value=x.dataset.chip; resizeTxt($('#cvInput')); $('#cvInput').focus(); }));
+
+</script>
+</body>
+</html>

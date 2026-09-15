@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
       orderBy: (c, { desc }) => [desc(c.createdAt)],
       with: { messages: { orderBy: (m, { desc }) => [desc(m.createdAt)], limit: 1 } },
     });
-    return Response.json({ conversations: list.map(c => ({ id: c.id, title: c.title, departmentId: c.departmentId, createdAt: c.createdAt, lastMessage: c.messages?.[0]?.content ?? null })) });
+    return Response.json({ conversations: list.map(c => ({ id: c.id, title: c.title, departmentId: c.departmentId, categoryKey: c.categoryKey, categoryLabel: c.categoryLabel, createdAt: c.createdAt, lastMessage: c.messages?.[0]?.content ?? null })) });
   } catch (e) { return jsonError(e); }
 }
 
@@ -29,7 +29,18 @@ export async function POST(req: NextRequest) {
     }
     if (!departmentId) return Response.json({ error: "부서가 필요합니다." }, { status: 400 });
     const title = String(body.title ?? "새 대화");
-    const conv = { id: randomUUID(), userId: user.id, departmentId, title, createdAt: new Date() };
+    // 업무 카드 스코프 (컨셉 §05) — 검증은 클라이언트 카탈로그와 서버 공통 로직으로
+    let catKey: string | null = null;
+    let catLabel: string | null = null;
+    try {
+      const ck = String(body.categoryKey ?? "").trim() || null;
+      if (ck) {
+        const { getCategory } = await import("@/lib/catalog");
+        const cat = getCategory(departmentId, ck);
+        if (cat) { catKey = ck; catLabel = cat.label; }
+      }
+    } catch { /* 카탈로그 로드 실패 시 카테고리 미사용 */ }
+    const conv = { id: randomUUID(), userId: user.id, departmentId, title, categoryKey: catKey, categoryLabel: catLabel, createdAt: new Date() };
     await db.insert(schema.conversations).values(conv);
     return Response.json({ conversation: conv }, { status: 201 });
   } catch (e) { return jsonError(e); }

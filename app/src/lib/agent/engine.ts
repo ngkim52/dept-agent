@@ -5,7 +5,7 @@ import { getDepartmentToolNames } from "@/agent-tools";
 import { requireRagConfig, config } from "@/lib/config";
 import { getLlmModel } from "@/lib/agent/llm";
 import { getPersona, type Persona } from "@/lib/agent/personas";
-import { buildPersonaSystemPromptWithSkills, getPersonaSkills } from "@/lib/agent/skills";
+import { buildPersonaSystemPromptWithHarness } from "@/lib/agent/skills";
 import type { Message as DbMessage } from "@/lib/db/schema";
 import { Agent, type AgentTool, type AgentToolResult, type StreamFn } from "@earendil-works/pi-agent-core";
 import { generateSummaryWithUsage, type AgentMessage } from "@earendil-works/pi-agent-core";
@@ -117,7 +117,7 @@ export function makeSubAgentDelegateTool(streamFn: StreamFn, model: any, opts: A
     async execute(toolCallId: string, params: any, _signal?: AbortSignal) {
       const subPersona = getPersona((params as SubAgentParams).department);
       if (!subPersona) throw new Error(`알 수 없는 부서: ${params.department}`);
-      const subPersonaPrompt = buildPersonaSystemPromptWithSkills(subPersona.systemPrompt, getPersonaSkills((params as SubAgentParams).department));
+      const subPersonaPrompt = await buildPersonaSystemPromptWithHarness((params as SubAgentParams).department, subPersona.systemPrompt);
       // 서브에이전트는 전용 모델("simple") 사용 — UI 설정 가능, 실패 시 메인 모델 fallback
       // 단, simple 모델이 메인 모델과 같은 provider/gateway여야 streamFn 호환. 다를 경우 메인 모델로 fallback (P2-E3)
       let subModel = model;
@@ -242,8 +242,8 @@ export function makePythonDataTool(
 }
 
 /** 상위 PI 에이전트 생성 — 페르소나 + 서브에이전트 위임 + RAG 검색 툴 + 웹 검색 + 파이썬 데이터 + hooks + 스킬 */
-export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, history: PiMessage[] = [], opts: AgentOptions = {}, datasetIds: (string | null | undefined)[] = []) {
-  const systemPrompt = buildPersonaSystemPromptWithSkills(persona.systemPrompt, getPersonaSkills(persona.key));
+export function buildPiAgent(persona: Persona, streamFn: StreamFn, model: any, history: PiMessage[] = [], opts: AgentOptions = {}, datasetIds: (string | null | undefined)[] = [], systemPromptOverride?: string) {
+  const systemPrompt = systemPromptOverride ?? persona.systemPrompt;
   // 부서별 도구 구성 (src/agent-tools/<부서키>.ts 에서 지정)
   const toolNames = getDepartmentToolNames(persona.key);
   const tools: AgentTool<any>[] = [];
@@ -326,7 +326,8 @@ export async function runPersonaAgent(
   history: Pick<DbMessage, "role" | "content" | "createdAt">[],
   ragChunks: RagHint[],
   cb: StreamCallbacks,
-  opts: AgentOptions = {}
+  opts: AgentOptions = {},
+  promptHints: { categoryKey?: string | null; style?: "coaching" | "conclusion" } = {}
 ): Promise<{ text: string; webCitations: { title: string; url: string; snippet: string }[] }> {
   const webCitations: { title: string; url: string; snippet: string }[] = [];
   const { models, model } = await getLlmModel("response");
@@ -392,11 +393,12 @@ export async function runPersonaAgent(
         return [systemRag, ...messages];
       }
     : undefined;
+  const systemPrompt = await buildPersonaSystemPromptWithHarness(persona.key, persona.systemPrompt, { categoryKey: promptHints.categoryKey ?? null, style: promptHints.style ?? "coaching", question: userMessage });
   const agent = buildPiAgent(persona, streamFn, model, historyForAgent, {
     ...opts,
     transformContext,
     onWebCitation: (c) => { webCitations.push(c); opts.onWebCitation?.(c); },
-  });
+  }, undefined, systemPrompt);
 
   let text = "";
   let thinkingBuf = "";

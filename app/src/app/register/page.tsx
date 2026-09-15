@@ -41,20 +41,20 @@ export default function RegisterPage() {
     <main className="flex min-h-screen items-center justify-center bg-canvas px-6 py-12">
       <div className="w-full max-w-sm">
         <div className="mb-8">
-          <Link href="/" className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint hover:text-ink">Dept · Agent</Link>
-          <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-ink">가입 신청</h1>
-          <p className="mt-1 text-sm text-ink-soft">회사 이메일로 가입한 뒤 부서를 선택합니다.</p>
+          <Link href="/login" className="eyebrow">Dept · Agent</Link>
+          <h1 className="mt-4 font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-ink">가입 신청</h1>
+          <p className="mt-3 text-sm leading-relaxed text-ink-soft">회사 이메일로 가입한 뒤 부서를 선택합니다.</p>
         </div>
 
         {done ? (
           <div className="rise rounded-xl border border-line bg-surface p-8">
             <p className="rounded-md bg-pale-green px-3 py-2 text-sm leading-relaxed text-pale-green-text">{done}</p>
-            <Link href="/" className="lift mt-5 block rounded-md bg-ink py-2.5 text-center text-sm font-semibold text-white hover:bg-[#33312E]">
+            <Link href="/login" className="lift mt-5 block rounded-md bg-ink py-2.5 text-center text-sm font-semibold text-white hover:bg-[#33312E]">
               로그인 화면으로
             </Link>
           </div>
         ) : (
-          <form onSubmit={onSubmit} className="rise space-y-4 rounded-xl border border-line bg-surface p-8">
+          <form onSubmit={onSubmit} className="rise doppel"><div className="doppel-inner card-core bg-surface space-y-4 p-8">
             <div>
               <label htmlFor="email" className="text-xs font-medium text-ink-soft">회사 이메일</label>
               <input id="email" type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)}
@@ -89,12 +89,13 @@ export default function RegisterPage() {
             </button>
             <p className="text-center text-sm text-ink-soft">
               이미 계정이 있으신가요?{" "}
-              <Link href="/" className="font-medium text-accent hover:text-accent-deep">로그인</Link>
+              <Link href="/login" className="font-medium text-accent hover:text-accent-deep">로그인</Link>
             </p>
+          </div>
           </form>
         )}
         <p className="mt-6 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-ink-faint">
-          첫 가입자는 관리자로 승인됩니다
+          반갑습니다!
         </p>
       </div>
     </main>

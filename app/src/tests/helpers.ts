@@ -9,6 +9,13 @@ export async function resetDb() {
   await db.delete(schema.departmentDatasets);
   await db.delete(schema.documents);
   await db.delete(schema.appSettings);
+  await db.delete(schema.knowledgeEdges);
+  await db.delete(schema.improvementCandidates);
+  await db.delete(schema.episodes);
+  await db.delete(schema.knowledgeVersions);
+  await db.delete(schema.knowledgeMemories);
+  await db.delete(schema.knowledgeSkills);
+  await db.delete(schema.knowledgePrompts);
   await db.delete(schema.users);
   await db.delete(schema.departments);
 }

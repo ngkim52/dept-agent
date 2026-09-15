@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db, schema } from "@/lib/db";
 import { and, eq } from "drizzle-orm";
@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
     where: eq(schema.messages.conversationId, conversationId),
     orderBy: (m, { asc }) => [asc(m.createdAt)],
   });
+  // 멀티턴 완성 감지: 이번 답변 추가 전 이미 답변이 2개 이상이면 "복수 턴 답변" → 단일 통합 후보
+  const preAssistantCount = history.filter((m) => m.role === "assistant").length;
 
   // 사용자 메시지 저장
   await db.insert(schema.messages).values({
@@ -102,6 +104,16 @@ export async function POST(req: NextRequest) {
       console.error("RAG 검색 실패(다운/타임아웃):", e);
     }
   }
+  // 이전 턴에서 검증된 복수 턴 답변이 있으면 단일 답변으로 재사용 (검증 검색, 요구: 멀티턴→단일)
+  if (!ragFailed) {
+    try {
+      const { findConsolidatedAnswer } = await import("@/lib/chat/qaStore");
+      const pre = await findConsolidatedAnswer(message);
+      if (pre) {
+        ragChunks.push({ content: pre.answer, source: "이전 통합 답변: " + pre.canonicalQuestion.slice(0, 30), similarity: 0.99 });
+      }
+    } catch (e) { console.error("통합답변 검색 실패:", e); }
+  }
   const chunks = [...fileChunks, ...ragChunks];
 
   const stream = new ReadableStream<Uint8Array>({
@@ -132,7 +144,7 @@ export async function POST(req: NextRequest) {
             else if (ev.type === "tool_end") send("progress", { phase: "tool_done", toolName: ev.toolName, ok: ev.ok });
             else if (ev.type === "done") send("progress", { phase: "done" });
           },
-        }, { thinkingLevel, uploadFiles });
+        }, { thinkingLevel, uploadFiles }, { categoryKey: conversation.categoryKey ?? null, style: user.responseStyle ?? "coaching" });
         // 근거(citations) 통합: RAG 청크 + 웹 검색 결과 (외부 링크 포함)
         const citations = [
           ...chunks.map(c => ({ type: "rag", source: c.source, content: c.content, similarity: c.similarity })),
@@ -154,6 +166,31 @@ export async function POST(req: NextRequest) {
           await db.update(schema.conversations)
             .set({ title: message.length > 30 ? message.slice(0, 30) + "…" : message })
             .where(eq(schema.conversations.id, conversationId));
+        }
+        // 멀티턴(답변 2개 이상) 대화가 완성되면 단일 Q/A로 통합해 draft 저장 (후속 유사 질문 재사용 원천)
+        if (preAssistantCount >= 2) {
+          try {
+            const { consolidateRecent } = await import("@/lib/chat/qaStore");
+            await consolidateRecent(conversationId);
+          } catch (e) { console.error("[consolidate] 멀티턴 통합 저장 실패:", e); }
+        }
+        // 모든 구성원 채팅 완료 시 — 지식하네스 자동 선별·후보 수집 (자동 적용 아님, 대기 후보만 등록, 부서장 승인 후 반영)
+        // after()를 사용해야 응답 종료 후에도 확실히 완료된다 (fire-and-forget 미-await 프라미스는 라우트 종료 시 중단될 수 있음).
+        try {
+          after(async () => {
+            try {
+              const { harvestForConversation } = await import("@/lib/harness/harvest");
+              await harvestForConversation(conversationId);
+            } catch (e) { console.error("[harvest] 자동 지식 선별 실패:", e); }
+          });
+        } catch {
+          // after 미지원 환경(테스트 등)에서는 fire-and-forget 폴백 (best-effort)
+          void (async () => {
+            try {
+              const { harvestForConversation } = await import("@/lib/harness/harvest");
+              await harvestForConversation(conversationId);
+            } catch (e) { console.error("[harvest] 자동 지식 선별 실패:", e); }
+          })();
         }
         send("done", { messageId: assistantMessageId, content: assistantText });
       } catch (e) {

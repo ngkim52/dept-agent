@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "가입 승인 대기 중입니다. 관리자 승인 후 이용할 수 있습니다." }, { status: 403 });
     }
     const { token, expiresAt } = await createSession(user.id);
-    const res = Response.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, departmentId: user.departmentId } });
+    const res = Response.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, departmentId: user.departmentId, responseStyle: user.responseStyle } });
     res.headers.set("Set-Cookie", `${config.sessionCookieName}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor((expiresAt.getTime() - Date.now()) / 1000)}${config.cookieSecure ? "; Secure" : ""}`);
     return res;
   } catch (e) { return jsonError(e); }
