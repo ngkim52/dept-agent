@@ -24,7 +24,19 @@ export async function listWorkTasks(opts?: { personaKey?: string; status?: WorkT
   return rows;
 }
 
+export async function findWorkTaskByTitle(personaKey: string, title: string): Promise<WorkTask | null> {
+  const rows = await db.select().from(schema.workTasks)
+    .where(and(eq(schema.workTasks.personaKey, personaKey), eq(schema.workTasks.title, title)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function createWorkTask(input: Partial<NewWorkTask>, createdBy?: string): Promise<WorkTask> {
+  // 부서장 의견 항목칩에서 등록한 일감은 같은 항목(제목)이 이미 있으면 새로 만들지 않음(무한 생성 방지)
+  if (input.source === "director_note" && input.title) {
+    const existing = await findWorkTaskByTitle(input.personaKey ?? "claims-planning", input.title);
+    if (existing) return existing;
+  }
   const id = randomUUID();
   const t = now();
   const row: NewWorkTask = {

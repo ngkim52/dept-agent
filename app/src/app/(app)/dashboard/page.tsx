@@ -565,7 +565,7 @@ function ChatPanel({ dash }: { dash: ClaimDashboard | null }) {
 }
 
 
-function DirectorNote({ review, onMeeting, onTask }: { review: SectionReview | null; onMeeting: (review: SectionReview) => void; onTask?: (title: string) => void }) {
+function DirectorNote({ review, onMeeting, onTask, registered }: { review: SectionReview | null; onMeeting: (review: SectionReview) => void; onTask?: (title: string) => void; registered?: (t: string) => boolean }) {
   if (!review) return null;
   const teams = review.teams ?? {};
   const teamsEntries = Object.entries(teams);
@@ -600,10 +600,14 @@ function DirectorNote({ review, onMeeting, onTask }: { review: SectionReview | n
                 <div key={part} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
                   <span style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, color: pc.fg, background: pc.bg, borderRadius: 7, padding: "2px 8px", border: "1px solid " + pc.bg }}>{part}</span>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {items.map((t, j) => (
-                      <button key={j} title="클릭하면 부서 워크큐에 일감으로 등록" onClick={() => onTask?.(t)}
-                        style={{ fontSize: 10.5, color: "var(--ink,#1C1917)", background: "#FFFFFF", border: "1px solid #E3E0DB", borderRadius: 7, padding: "2px 8px", cursor: onTask ? "pointer" : "default" }}>{t}</button>
-                    ))}
+                    {items.map((t, j) => {
+                      const reg = registered?.(t) ?? false;
+                      return (
+                        <button key={j} disabled={reg} title={reg ? "이미 부서 워크큐에 일감으로 등록됨" : "클릭하면 부서 워크큐에 일감으로 등록"}
+                          onClick={() => onTask?.(t)}
+                          style={{ fontSize: 10.5, color: reg ? "#3E8E5A" : "var(--ink,#1C1917)", background: reg ? "#EAF4EE" : "#FFFFFF", border: "1px solid " + (reg ? "#BFE0CC" : "#E3E0DB"), borderRadius: 7, padding: "2px 8px", cursor: onTask && !reg ? "pointer" : "default", textDecoration: reg ? "none" : undefined }}>{reg ? "✓ " + t : t}</button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -709,7 +713,7 @@ export default function Dashboard() {
   }, [router]);
 
   const loadWork = () => fetch("/api/workqueue").then(r => r.json()).then(d => { setWorkTasks(d.tasks ?? []); setWorkStats(d.stats ?? null); }).catch(() => {});
-  const makeTask = (title: string) => fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, source: "director_note" }) }).then(loadWork).catch(() => {});
+  const makeTask = (title: string) => { if (workTasks.some((w) => w.title === title)) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, source: "director_note" }) }).then(loadWork).catch(() => {}); };
   const dash = data?.dash;
   const [meeting, setMeeting] = useState<SectionReview | null>(null);
   const [selKpi, setSelKpi] = useState<string | null>(null);
@@ -744,11 +748,11 @@ export default function Dashboard() {
             <SectionTitle title={`핵심 KPI · ${curMonth(dash)} 실적`} note="지급보험금 중심 지표" />
             <KpiCards kpis={dash.kpis} onSelect={(key: string) => setSelKpi(selKpi === key ? null : key)} selected={selKpi} />
             {selKpiDetail && <KpiDetailPanel detail={selKpiDetail} onClose={() => setSelKpi(null)} />}
-            <DirectorNote review={reviewsBy(data, "kpi")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} />
+            <DirectorNote review={reviewsBy(data, "kpi")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <SectionTitle title="지급보험금 처리 흐름" note={`${curMonth(dash)} 실적 · 클릭하면 해당 단계 질문`} />
             <Pipeline pipe={dash.pipeline} flowNote={dash.pipelineFlowNote} qs={[]} />
-            <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} />
+            <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <DeadlineCard dash={dash} />
@@ -774,7 +778,7 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
-            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} />
+            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <NewsCard fss={dash.fssNews} ins={dash.insNews} />

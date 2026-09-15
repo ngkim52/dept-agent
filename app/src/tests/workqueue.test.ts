@@ -43,4 +43,17 @@ describe("부서 워크큐 (018-B)", () => {
     expect(st.total).toBe(1);
     expect(t.ragSynced).toBe(true);
   });
+  it("부서장 의견 항목칩 중복 등록 방지 — 같은 제목이면 재생성하지 않음", async () => {
+    const t1 = await createWorkTask({ personaKey: "claims-planning", title: "진단 심사 단축", source: "director_note" }, "user-1");
+    const t2 = await createWorkTask({ personaKey: "claims-planning", title: "진단 심사 단축", source: "director_note" }, "user-1");
+    expect(t2.id).toBe(t1.id);
+    expect((await listWorkTasks({ personaKey: "claims-planning" })).length).toBe(1);
+  });
+
+  it("부서장 의견 항목칩과 일반 생성은 제목 같아도 구분(서로 다른 일감 허용)", async () => {
+    const t1 = await createWorkTask({ personaKey: "claims-planning", title: "손해율 목표", source: "director_note" }, "user-1");
+    const t2 = await createWorkTask({ personaKey: "claims-planning", title: "손해율 목표" }, "user-1");
+    expect(t2.id).not.toBe(t1.id);
+    expect((await listWorkTasks({ personaKey: "claims-planning" })).length).toBe(2);
+  });
 });
