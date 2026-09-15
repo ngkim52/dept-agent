@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireUser, requireAdmin, jsonError, HttpError } from "@/lib/auth/http";
-import { resolveCandidate, applyCandidate, getCandidate, findRelatedItems } from "@/lib/harness/review";
+import { resolveCandidate, applyCandidate, getCandidate, findRelatedByLLM, setCandidateRelated } from "@/lib/harness/review";
 
 // 온디맨드 LLM 정밀 연관 판정: 단건 후보에 대해서만 LLM으로 진짜 유사한 기존 지식 선택
 // (목록에서는 호출하지 않아 로딩이 막히지 않도록, 여기서만 LLM 사용 / 실패 시 휴리스틱 폴백)
@@ -44,10 +44,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const candidate = await getCandidate(id);
     if (!candidate) throw new HttpError(404, "후보가 없습니다.");
     if (req.nextUrl.searchParams.get("related") === "1") {
-      const related = candidate.status === "pending" && candidate.proposedContent
-        ? await findRelatedItems(candidate.personaKey, candidate.proposedContent, 0.45, 5, await makeJudgeCall())
-        : [];
-      return Response.json({ candidate, related });
+      // 온디맨드 LLM 정밀 재판정: 진짜 유사 항목만 골라 저장된 관계를 갱신한다.
+      // (유사 없으면 related:[ ]로 해제 → 목록에서 단건만 표시 / 실패 시 stored 관련 유지)
+      const call = await makeJudgeCall();
+      let related: any[] = [];
+      if (candidate.status === "pending" && candidate.proposedContent && call) {
+        related = await findRelatedByLLM(candidate.personaKey, candidate.proposedContent, call, 5);
+      } else if (candidate.status === "pending" && candidate.relatedType && candidate.relatedId) {
+        const { getEntry } = await import("@/lib/harness/store");
+        const entry = await getEntry(candidate.relatedType as any, candidate.relatedId);
+        if (entry) related = [{ type: candidate.relatedType, id: candidate.relatedId, title: (entry as any).title ?? (entry as any).name ?? "항목", content: entry.content, score: 1 }];
+      }
+      if (call && candidate.proposedContent) {
+        await setCandidateRelated(id, related[0] ? { type: related[0].type, id: related[0].id, title: related[0].title } : null);
+      }
+      return Response.json({ candidate: await getCandidate(id), related });
     }
     return Response.json({ candidate });
   } catch (e) { return jsonError(e); }

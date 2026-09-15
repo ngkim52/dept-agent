@@ -108,15 +108,16 @@ export async function createCandidatesFromHarvest(
   personaKey: string,
   conversationId: string,
   items: HarvestItem[],
+  call?: (prompt: string) => Promise<string>,
 ): Promise<{ createdCount: number }> {
-  const { createCandidate } = await import("@/lib/harness/review");
+  const { createCandidate, findRelatedByLLM, setCandidateRelated } = await import("@/lib/harness/review");
   let createdCount = 0;
   for (const it of items) {
     // 이미 같은 원천·내용의 pending 후보가 있으면 건너뛰기 (재제안 방지)
     const existing = (await import("@/lib/harness/review")).listCandidates({ personaKey, status: "pending" });
     const dup = (await existing).some((c) => c.sourceId === conversationId && (c.proposedContent ?? "").trim() === it.content.trim());
     if (dup) continue;
-    await createCandidate({
+    const cand = await createCandidate({
       personaKey,
       sourceKind: "admin_chat",
       sourceId: conversationId,
@@ -126,6 +127,12 @@ export async function createCandidatesFromHarvest(
       proposedContent: it.content,
       confidence: it.confidence,
     });
+    // 생성 시점에 LLM(call)로 진짜 유사 1건을 판정·저장한다.
+    // call이 없으면 유사 판정을 저장하지 않는다(비유사로 단건만 노출).
+    if (call && it.content) {
+      const related = await findRelatedByLLM(personaKey, it.content, call, 1);
+      await setCandidateRelated(cand.id, related[0] ? { type: related[0].type, id: related[0].id, title: related[0].title } : null);
+    }
     createdCount++;
   }
   return { createdCount };

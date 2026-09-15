@@ -213,6 +213,8 @@ export const improvementCandidates = sqliteTable("improvement_candidates", {
   targetTitle: text("target_title"),
   proposedContent: text("proposed_content"),
   confidence: real("confidence").notNull().default(0),
+  relatedType: text("related_type"),
+  relatedId: text("related_id"),
   status: text("status", { enum: ["pending", "approved", "rejected", "applied", "edited"] }).notNull().default("pending"),
   adminNote: text("admin_note"),
   resolvedBy: text("resolved_by"),
@@ -326,3 +328,28 @@ export const qaLinks = sqliteTable("qa_links", {
 }));
 export type QALink = typeof qaLinks.$inferSelect;
 export type NewQALink = typeof qaLinks.$inferInsert;
+
+
+// ── 부서 워크큐: 일감 (대시보드·업무진도 모니터링 연동) (018-B) ──
+export const workTasks = sqliteTable("work_tasks", {
+  id: text("id").primaryKey(),
+  personaKey: text("persona_key").notNull().default("claims-planning"),
+  title: text("title").notNull(),
+  assignee: text("assignee"),
+  category: text("category"),               // 주간/월간/일반 등
+  dueDate: text("due_date"),             // "YYYY-MM-DD"
+  status: text("status", { enum: ["todo", "doing", "done", "delayed"] }).notNull().default("todo"),
+  progress: integer("progress").notNull().default(0),   // 0~100
+  source: text("source", { enum: ["director_note", "direct"] }).notNull().default("direct"),
+  directorNoteRef: text("director_note_ref"),          // 부서장 의견 항목 참조
+  content: text("content"),              // 진행 내용(주간/월간 업무 등)
+  ragSynced: integer("rag_synced", { mode: "boolean" }).notNull().default(false), // RAG 등록 여부
+  createdBy: text("created_by"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  wqPersonaIdx: index("wq_persona_idx").on(t.personaKey),
+  wqStatusIdx: index("wq_status_idx").on(t.status),
+}));
+export type WorkTask = typeof workTasks.$inferSelect;
+export type NewWorkTask = typeof workTasks.$inferInsert;

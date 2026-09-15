@@ -70,3 +70,23 @@ describe("POST /api/admin/harvest", () => {
     expect(res.status).not.toBe(403);
   });
 });
+
+describe("createCandidatesFromHarvest — 생성 시 LLM 유사 판정 저장", () => {
+  it("call 있으면 진짜 유사 1건 저장(setCandidateRelated)", async () => {
+    const { createMemory } = await import("@/lib/harness/store");
+    const sim = await createMemory({ personaKey: "claims-planning", content: "손해율 5% 초과 시 원인분석 착수" });
+    const call = async () => JSON.stringify({ items: [{ id: sim.id, reason: "유사", score: 90 }] });
+    await createCandidatesFromHarvest("claims-planning", "c1", [{ kind: "rule", content: "손해율 5% 초과 시 원인분석을 착수한다", confidence: 0.9 }], call);
+    const cands = await listCandidates({ personaKey: "claims-planning" });
+    expect(cands).toHaveLength(1);
+    expect(cands[0].relatedType).toBe("memory");
+    expect(cands[0].relatedId).toBe(sim.id);
+  });
+  it("call 없으면 유사 저장 안 함(비유사)", async () => {
+    await createCandidatesFromHarvest("claims-planning", "c1", [{ kind: "rule", content: "팀 회식 장소 협의", confidence: 0.9 }]);
+    const cands = await listCandidates({ personaKey: "claims-planning" });
+    expect(cands).toHaveLength(1);
+    expect(cands[0].relatedType).toBeNull();
+    expect(cands[0].relatedId).toBeNull();
+  });
+});

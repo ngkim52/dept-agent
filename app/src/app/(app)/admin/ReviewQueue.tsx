@@ -149,10 +149,10 @@ export default function ReviewQueue() {
                 <input value={draft[c.id]?.note ?? ""} onChange={e => setDraft(d => ({ ...d, [c.id]: { content: d[c.id]?.content ?? c.proposedContent ?? "", note: e.target.value } }))} placeholder="부서장 의견 (거절 이유 등)" className="mt-2 w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs" />
                 {c.status === "pending" && (
                   <>
+                    <button onClick={async () => { try { const r = await fetch(`/api/admin/candidates/${c.id}?related=1`); if (r.ok) { const d = await r.json(); setCands(prev => prev.map(x => x.id === c.id ? { ...x, related: d.related ?? [] } : x)); flash(true, d.related && d.related.length ? "LLM 유사 항목 저장 완료" : "유사 항목이 없어 단건으로 표시합니다"); } else { flash(false, "재판정 실패"); } } catch { flash(false, "재판정 오류"); } }} className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-800 hover:bg-amber-100">LLM로 정밀 재판정</button>
                     {(c.related && c.related.length > 0) && (
                       <div className="mt-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2">
                         <p className="text-[11px] font-semibold text-amber-800">연관/유사한 기존 지식이 감지됐습니다 — 신규 생성 또는 기존 항목의 수정/교체를 선택하세요.</p>
-                        <button onClick={async () => { try { const r = await fetch(`/api/admin/candidates/${c.id}?related=1`); if (r.ok) { const d = await r.json(); setCands(prev => prev.map(x => x.id === c.id ? { ...x, related: d.related ?? [] } : x)); flash(true, "LLM 연관 재판정 완료"); } else { flash(false, "재판정 실패"); } } catch { flash(false, "재판정 오류"); } }} className="mt-1 rounded-md border border-amber-300 bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800 hover:bg-amber-200">LLM로 정밀 재판정</button>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {(["create", "modify", "replace"] as const).map((md) => (
                             <label key={md} className="flex cursor-pointer items-center gap-1 text-[11px] text-ink-soft">

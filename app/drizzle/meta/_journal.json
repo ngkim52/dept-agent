@@ -1,1 +1,76 @@
-{"version": "7", "dialect": "sqlite", "entries": [{"idx": 0, "version": "6", "when": 1787537796070, "tag": "0000_keen_beast", "breakpoints": true}, {"idx": 1, "version": "6", "when": 1787656952651, "tag": "0001_dashing_deathstrike", "breakpoints": true}, {"idx": 2, "version": "6", "when": 1787709594535, "tag": "0002_stiff_adam_destine", "breakpoints": true}, {"idx": 3, "version": "6", "when": 1788944182877, "tag": "0003_swift_vector", "breakpoints": true}, {"idx": 4, "version": "6", "when": 1788952853340, "tag": "0004_exotic_genesis", "breakpoints": true}, {"idx": 5, "version": "6", "when": 1789093172422, "tag": "0005_legal_madripoor", "breakpoints": true}, {"idx": 6, "version": "6", "when": 1789093961025, "tag": "0006_vengeful_naoko", "breakpoints": true}, {"idx": 7, "version": "6", "when": 1789117874980, "tag": "0007_groovy_shaman", "breakpoints": true}, {"idx": 8, "version": "6", "when": 1789436632978, "tag": "0008_qa_consolidation", "breakpoints": true}]}
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787537796070,
+      "tag": "0000_keen_beast",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787656952651,
+      "tag": "0001_dashing_deathstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787709594535,
+      "tag": "0002_stiff_adam_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788944182877,
+      "tag": "0003_swift_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788952853340,
+      "tag": "0004_exotic_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789093172422,
+      "tag": "0005_legal_madripoor",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789093961025,
+      "tag": "0006_vengeful_naoko",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789117874980,
+      "tag": "0007_groovy_shaman",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789436632978,
+      "tag": "0008_qa_consolidation",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789459334345,
+      "tag": "0009_lucky_tinkerer",
+      "breakpoints": true
+    }
+  ]
+}

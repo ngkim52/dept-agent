@@ -39,6 +39,21 @@ export async function getCandidate(id: string): Promise<ImprovementCandidate | n
   const rows = await db.select().from(schema.improvementCandidates).where(eq(schema.improvementCandidates.id, id)).limit(1);
   return rows[0] ?? null;
 }
+
+/**
+ * 후보가 참조하는 "진짜 유사" 기존 지식 항목을 저장/해제한다.
+ * 관련: LLM 판정 결과를 relatedType/relatedId로 영속화해 목록에 저장된 유사만 노출한다.
+ * related가 null이면(판정 결과 유사 없음) 저장된 연관을 해제한다.
+ */
+export async function setCandidateRelated(
+  id: string,
+  related: { type: RelatedItem["type"]; id: string; title?: string } | null,
+): Promise<ImprovementCandidate | null> {
+  await db.update(schema.improvementCandidates)
+    .set({ relatedType: related ? related.type : null, relatedId: related ? related.id : null })
+    .where(eq(schema.improvementCandidates.id, id));
+  return getCandidate(id);
+}
 export async function listCandidates(opts?: { personaKey?: string; status?: ImprovementCandidate["status"] }): Promise<ImprovementCandidate[]> {
   let rows = await db.select().from(schema.improvementCandidates);
   if (opts?.personaKey) rows = rows.filter((r) => r.personaKey === opts.personaKey);
