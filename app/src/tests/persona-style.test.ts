@@ -92,3 +92,19 @@ describe("시점(시간) 정합성 — 회의록·과거 자료를 진행 중으
     expect(p).toContain("오늘 날짜");
   });
 });
+
+describe("질문 의도 명확화 — 짧고 모호한 질문 시 확인 질문 (최대 5회)", () => {
+  it("기본 시스템 프롬프트에 규칙 블록이 포함", () => {
+    const p = baseSystemPrompt("보험금기획팀장");
+    expect(p).toContain("질문 의도 명확화");
+    expect(p).toContain("짧은 확인 질문");
+    expect(p).toContain("최대 5회");
+    expect(p).toContain("가장 합리적인 가정");
+  });
+  it("하네스 합성 프롬프트에도 질문 의도 명확화 규칙이 전달", async () => {
+    const p = await buildPersonaSystemPromptWithHarness("claims-planning", baseSystemPrompt("보험금기획팀장"), { question: "손해율 알려줘", style: "coaching" });
+    expect(p).toContain("질문 의도 명확화");
+    expect(p).toContain("최대 5회");
+    expect(p).toContain("가장 합리적인 가정");
+  });
+});

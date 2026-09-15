@@ -152,6 +152,14 @@ export function mergeWithHarness(base: string, fileSkills: SkillHint[], harness:
   return out;
 }
 
+/** 실제 프롬프트에 포함된 지식 항목(프롬프트/스킬/메모리)의 사용횟수(hitCount)를 증가 */
+export async function bumpHarnessHitCounts(harness: HarnessBundle): Promise<void> {
+  const { bumpHitCount } = await import("@/lib/harness/store");
+  for (const p of harness.prompts) await bumpHitCount("prompt", p.id);
+  for (const s of harness.skills) await bumpHitCount("skill", s.id);
+  for (const m of harness.memories) await bumpHitCount("memory", m.id);
+}
+
 export interface PromptBuildOptions {
   categoryKey?: string | null;
   style?: "coaching" | "conclusion";
@@ -202,6 +210,8 @@ export async function buildPersonaSystemPromptWithHarness(
       usedHarness = selectHarnessKnowledge(harness, opts.question, opts.categoryKey ?? null, { keepMin: 2 });
     } catch { /* 선택 실패 시 전체 유지 */ }
   }
+  // 실제 프롬프트에 포함되는 지식 항목의 사용횟수 집계 (LLM에게 던져진 횟수)
+  await bumpHarnessHitCounts(usedHarness);
   let out = mergeWithHarness(base, fileSkills, usedHarness);
   // 조건부 운용 모듈: 질문 분류에 따라 웹검색/데이터 질문 규칙 조합
   try {
