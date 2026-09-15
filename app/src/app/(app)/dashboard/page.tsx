@@ -500,6 +500,30 @@ function MonitorCard({ m }: { m: Monitor }) {
   );
 }
 
+function MonRow({ t, actions }: { t: any; actions?: boolean }) {
+  return (
+    <div className="cd">
+      <div className="cd-head"><Lvl tone={t.status === "delayed" ? "r" : t.status === "done" ? "g" : t.status === "doing" ? "b" : "n"} size={26} icon="bolt" iconSize={13} /><h3 style={{ flex: 1 }}>{t.title}</h3>
+        <QBtn label="질문" q={`일감「${t.title}」의 실행·진행 상황을 점검해 주세요.`} icon="chev" />
+      </div>
+      <div className="metriccell">
+        <div className="metricrow">
+          <div className="gauge">
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--ink-soft)", marginBottom: 5 }}><span>{t.assignee || "담당 미지정"}{t.dueDate ? " · " + t.dueDate : ""}</span><span>{t.status === "doing" ? "진행" : t.status === "done" ? "완료" : t.status === "delayed" ? "지연" : "대기"}</span></div>
+            <div className="kbar"><i style={{ width: `${Math.min(t.progress ?? 0, 100)}%`, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
+          </div>
+          <div className="gv"><span className="big-num">{t.progress ?? 0}<small>%</small></span></div>
+        </div>
+        <div className="planline"><span style={{ fontSize: 11 }}>{t.content || "등록된 내용 없음 (일감 상세 작성 필요)"}</span></div>
+        <div className="meta" style={{ marginTop: 6 }}><Tag tone={t.status === "done" ? "g" : t.status === "delayed" ? "r" : t.status === "doing" ? "b" : "n"}>{t.category || "일반"}</Tag>
+          <span style={{ fontSize: 10, color: "var(--ink-faint)" }}>{t.status === "delayed" ? "서면 보고 지시" : t.ragSynced ? "RAG 등록" : ""}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function NewsCard({ fss, ins }: { fss: NewsItem[]; ins: NewsItem[] }) {
   const router = useRouter();
   const [tab, setTab] = useState<"fss" | "ins">("fss");
@@ -759,25 +783,11 @@ export default function Dashboard() {
               <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} />
             </div>
 
-            <SectionTitle title="업무 진도 · 모니터링" note={`${curMonth(dash)} 실적 누적 · 부서 워크큐 반영`} />
-            <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
-              {dash.monitors.map(m => <MonitorCard key={m.key} m={m} />)}
+            <SectionTitle title="업무 진도 · 모니터링" note={`부서 워크큐 일감 ${workTasks.length}건`} />
+            <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
+              {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 부서 워크큐에서 일감을 생성하세요.</div>}
+              {workTasks.map(t => <MonRow key={t.id} t={t} />)}
             </div>
-            {workTasks.filter(t => t.status !== "done").length > 0 && (
-              <div style={{ marginTop: 12, padding: "10px 14px", border: "1px solid var(--line,#EDEAE5)", borderRadius: 12, background: "var(--surface,#fff)" }}>
-                <div className="eyebrow" style={{ fontSize: 10, letterSpacing: ".12em", color: "var(--ink-faint)", marginBottom: 6 }}>부서 워크큐 진행 현황</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {workTasks.filter(t => t.status !== "done").map(t => (
-                    <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 12, flex: 1 }}>{t.title}</span>
-                      <div style={{ width: 140, height: 7, borderRadius: 4, background: "#EFECE6" }}><div style={{ width: `${t.progress ?? 0}%`, height: 7, borderRadius: 4, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
-                      <span style={{ fontSize: 11, width: 34 }}>{t.progress ?? 0}%</span>
-                      {t.status === "delayed" && <span style={{ fontSize: 10.5, color: "#C05A6E" }}>서면 보고 지시</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
