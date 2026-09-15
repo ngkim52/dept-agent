@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb, withDept } from "./helpers";
-import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, syncTaskToRag, deleteWorkTask } from "@/lib/harness/workQueue";
+import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, deleteWorkTask } from "@/lib/harness/workQueue";
 
 beforeEach(async () => { await resetDb(); await withDept(); });
 
@@ -10,7 +10,7 @@ describe("부서 워크큐 (018-B)", () => {
     expect(t.id).toBeTruthy();
     expect(t.status).toBe("todo");
     expect(t.progress).toBe(0);
-    expect(t.ragSynced).toBe(true);
+    expect(t.status).toBe("todo");
     const list = await listWorkTasks({ personaKey: "claims-planning" });
     expect(list).toHaveLength(1);
     expect((await getWorkTask(t.id))!.title).toBe("손해율 목표 관리");
@@ -37,11 +37,12 @@ describe("부서 워크큐 (018-B)", () => {
     expect(d).toContain("서면 보고");
   });
 
-  it("RAG 동기화 시 문서로 저장", async () => {
+  it("진행내용은 DB에만 저장(ragSynced=false) — RAG 미등록", async () => {
     const t = await createWorkTask({ personaKey: "claims-planning", title: "진단 3일 내 처리", content: "전 산정 부분 일괄 정비", dueDate: "2026-09-20" }, "user-1");
-    const st = await taskStats();
-    expect(st.total).toBe(1);
-    expect(t.ragSynced).toBe(true);
+    expect(t.content).toBe("전 산정 부분 일괄 정비");
+    expect((await getWorkTask(t.id))!.content).toBe("전 산정 부분 일괄 정비");
+    // RAG가 아닌 DB(work_tasks)에만 저장
+    expect(t.ragSynced).toBe(false);
   });
   it("부서장 의견 항목칩 중복 등록 방지 — 같은 제목이면 재생성하지 않음", async () => {
     const t1 = await createWorkTask({ personaKey: "claims-planning", title: "진단 심사 단축", source: "director_note" }, "user-1");

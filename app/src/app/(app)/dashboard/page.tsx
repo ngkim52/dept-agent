@@ -739,11 +739,13 @@ export default function Dashboard() {
   }, [router]);
 
   const loadWork = () => fetch("/api/workqueue").then(r => r.json()).then(d => { setWorkTasks(d.tasks ?? []); setWorkStats(d.stats ?? null); }).catch(() => {});
-  const makeTask = (title: string) => { if (workTasks.some((w) => w.title === title)) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, source: "director_note" }) }).then(loadWork).catch(() => {}); };
+  const openTaskForm = (title: string) => { if (workTasks.some((w) => w.title === title)) return; setTaskDraft({ title, assignee: "", dueDate: "", content: "" }); };
+  const submitTask = () => { if (!taskDraft?.title?.trim()) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: taskDraft.title, assignee: taskDraft.assignee, dueDate: taskDraft.dueDate, content: taskDraft.content, source: "director_note" }) }).then(loadWork).then(() => setTaskDraft(null)).catch(() => {}); };
   const delTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "DELETE" }).then(loadWork).catch(() => {});
   const dash = data?.dash;
   const [meeting, setMeeting] = useState<SectionReview | null>(null);
   const [selKpi, setSelKpi] = useState<string | null>(null);
+  const [taskDraft, setTaskDraft] = useState<{ title: string; assignee: string; dueDate: string; content: string } | null>(null);
   const selKpiDetail = dash?.kpiDetails?.find((kd: any) => kd.key === selKpi) ?? null;
   return (
     <div className="dab-root">
@@ -775,11 +777,11 @@ export default function Dashboard() {
             <SectionTitle title={`핵심 KPI · ${curMonth(dash)} 실적`} note="지급보험금 중심 지표" />
             <KpiCards kpis={dash.kpis} onSelect={(key: string) => setSelKpi(selKpi === key ? null : key)} selected={selKpi} />
             {selKpiDetail && <KpiDetailPanel detail={selKpiDetail} onClose={() => setSelKpi(null)} />}
-            <DirectorNote review={reviewsBy(data, "kpi")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
+            <DirectorNote review={reviewsBy(data, "kpi")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <SectionTitle title="지급보험금 처리 흐름" note={`${curMonth(dash)} 실적 · 클릭하면 해당 단계 질문`} />
             <Pipeline pipe={dash.pipeline} flowNote={dash.pipelineFlowNote} qs={[]} />
-            <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
+            <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <DeadlineCard dash={dash} />
@@ -791,7 +793,7 @@ export default function Dashboard() {
               {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 부서 워크큐에서 일감을 생성하세요.</div>}
               {workTasks.map(t => <MonRow key={t.id} t={t} onDelete={delTask} />)}
             </div>
-            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} registered={(tt) => workTasks.some((w) => w.title === tt)} />
+            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <NewsCard fss={dash.fssNews} ins={dash.insNews} />
@@ -801,7 +803,28 @@ export default function Dashboard() {
                       </>
         )}
       </div>
-      <style>{"@media(max-width:720px){.dab-row.g2{grid-template-columns:1fr}}@media(max-width:900px){.dab-row.g4{grid-template-columns:1fr 1fr}}"}</style>
+      <style>{"@media(max-width:720px){.dab-row.g2{grid-template-columns:1fr}}@media(max-width:900px){.dab-row.g4{grid-template-columns:1fr 1fr}}"}
+      </style>
+      {taskDraft && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.4)", backdropFilter: "blur(2px)", zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setTaskDraft(null)}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: 18, width: "min(560px, 94vw)", boxShadow: "0 18px 50px rgba(0,0,0,.18)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Lvl tone="b" size={22} icon="bolt" iconSize={11} /><h3 style={{ fontSize: 15, margin: 0 }}>일감 등록</h3>
+              <button onClick={() => setTaskDraft(null)} style={{ marginLeft: "auto", border: "none", background: "transparent", fontSize: 16, color: "var(--ink-faint)", cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{taskDraft.title}</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <input value={taskDraft.assignee} onChange={e => setTaskDraft({ ...taskDraft, assignee: e.target.value })} placeholder="담당자" style={{ padding: "7px 9px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+                <input value={taskDraft.dueDate} onChange={e => setTaskDraft({ ...taskDraft, dueDate: e.target.value })} placeholder="마감일 (예 2026-09-30)" style={{ padding: "7px 9px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+              </div>
+              <textarea value={taskDraft.content} onChange={e => setTaskDraft({ ...taskDraft, content: e.target.value })} placeholder="진행 내용 (넓게 작성 가능) — DB에 저장되며, 이후 주간/월간 업무에서 조회해 갱신됩니다."
+                style={{ width: "100%", boxSizing: "border-box", minHeight: 160, padding: "9px 11px", fontSize: 13, lineHeight: 1.6, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
+              <button onClick={submitTask} disabled={!taskDraft.title.trim()} style={{ padding: "10px", borderRadius: 9, background: "#1F6C9F", color: "#fff", fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer" }}>일감 등록</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

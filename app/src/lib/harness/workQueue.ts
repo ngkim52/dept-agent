@@ -57,8 +57,7 @@ export async function createWorkTask(input: Partial<NewWorkTask>, createdBy?: st
     updatedAt: t,
   };
   await db.insert(schema.workTasks).values(row);
-  const created = (await getWorkTask(id))!;
-  await syncTaskToRag(created, createdBy);
+  // 진행내용은 RAG가 아닌 DB(work_tasks.content)에 저장 — 주간/월간 업무에서 조회해 갱신
   return (await getWorkTask(id))!;
 }
 
@@ -73,9 +72,7 @@ export async function updateWorkTask(id: string, patch: Partial<NewWorkTask>): P
   await db.update(schema.workTasks)
     .set({ ...patch, updatedAt: now() })
     .where(eq(schema.workTasks.id, id));
-  const updated = (await getWorkTask(id))!;
-  await syncTaskToRag(updated, updated.createdBy ?? undefined);
-  return updated;
+  return (await getWorkTask(id))!;
 }
 
 export async function deleteWorkTask(id: string): Promise<boolean> {
@@ -94,31 +91,6 @@ export function reportNotice(task: WorkTask): string | null {
     return `일감「${task.title}」가 지연 상태입니다. 담당자 ${task.assignee ?? "(지정 없음)"}는 사유를 부서장에게 서면 보고하세요.`;
   }
   return null;
-}
-
-/**
- * RAG 등록: 일감 내용·진행률을 크기 있는 텍스트로 만들어 부서 문서로 저장해 지식 검색 대상에 포함시킨다.
- * (실제 RAG 파이프라인 진입점으로 보내는 대신, 문서/데이터 후보로 저장하고 ragSynced=true)
- * userId가 없으면 content만 유지하고 ragSynced는 true로만 표시(후속 연동).
- */
-export async function syncTaskToRag(task: WorkTask, userId?: string): Promise<void> {
-  const content = `[일감/부서 워크큐] 제목: ${task.title}\n담당: ${task.assignee ?? "(미지정)"}\n카테고리: ${task.category ?? "일반"}\n기한: ${task.dueDate ?? "(미정)"}\n상태: ${task.status}\n진행률: ${task.progress}%\n내용:\n${task.content ?? ""}`;
-  try {
-    if (userId) {
-      await db.insert(schema.documents).values({
-        id: randomUUID(),
-        userId,
-        filename: `워크큐-일감-${task.id}.md`,
-        mimeType: "text/markdown",
-        size: content.length,
-        content,
-        ragflowDocId: null,
-        status: "done",
-        createdAt: now(),
-      }).onConflictDoNothing();
-    }
-  } catch { /* RAG 연동 실패해도 일감은 유지 */ }
-  await db.update(schema.workTasks).set({ ragSynced: true, updatedAt: now() }).where(eq(schema.workTasks.id, task.id));
 }
 
 /** 진행률 집계(모니터링용): 전체/완료/지연 수 */
