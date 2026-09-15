@@ -100,7 +100,7 @@ export const defaultJudge: JudgeFn = async (q, a, retrieved, call) => {
     "당신은 보험금기획팀 부서장 에이전트의 답변 품질 평가자(LLM-as-judge)입니다.",
     "질문과 에이전트 답변, 검색 참조를 보고 5개 차원을 0~100으로 채점하고, '위험(risk)'/'보완(warn)'/'정보(info)' 수준의 지적을 3~6개 제시하세요.",
     "특히 '시점 정합성': 회의록·과거 보고서의 종료된/과거 이벤트를 현재 시점의 진행 사항처럼 단정해 말하면 크게 감점하세요.",
-    'JSON만 반환하세요: {"dimensions":[{"key":"relevance","score":0,"reason":"..."},...],"findings":[{"level":"warn","text":"..."}]}',
+    "JSON만 반환: dimensions 배열, 원소={key, score(0~100), reason}, findings 배열, 원소={level(risk/warn/info), text}.",
     "차원 key: " + DRYRUN_DIMENSIONS.map((d) => d.key).join(", "),
     "--- 질문 ---\n" + q,
     "--- 검색 참조 ---\n" + (retrieved.length ? retrieved.join("\n") : "(없음)"),
