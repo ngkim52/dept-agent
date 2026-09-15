@@ -67,3 +67,28 @@ describe("responseStyle 저장 (me PATCH)", () => {
     expect(fresh.responseStyle).toBe("conclusion");
   });
 });
+
+
+import { baseSystemPrompt } from "@/lib/agent/personas";
+
+describe("시점(시간) 정합성 — 회의록·과거 자료를 진행 중으로 오인하지 않도록", () => {
+  it("기본 시스템 프롬프트에 시점 정합성 규칙이 포함 (회의록 과거=그 시점 기록 / 오늘 날짜)", () => {
+    const p = baseSystemPrompt("보험금기획팀장");
+    expect(p).toContain("시점(시간) 정합성");
+    expect(p).toContain("오늘 날짜");
+    expect(p).toContain("진행 중");
+    expect(p).toContain("종료");
+    expect(p).toContain("그 시점");
+  });
+  it("완료 여부 없으면 그 시점 기준 답변 + 너무 오래된 과거면 종료로 판단 + 모르면 확인 요청 지침", () => {
+    const p = baseSystemPrompt("계리 부서장");
+    for (const kw of ["완료·종료·확정·마감", "그 시점 기준", "최신 계획·일정·진척", "종료(완료)된 것으로", "확인을 요청합니다"]) {
+      expect(p).toContain(kw);
+    }
+  });
+  it("buildPersonaSystemPromptWithHarness 결과에도 시점 정합성 규칙 전달", async () => {
+    const p = await buildPersonaSystemPromptWithHarness("claims-planning", baseSystemPrompt("보험금기획팀장"), { question: "작년 결산 KPI는?", style: "conclusion" });
+    expect(p).toContain("시점(시간) 정합성");
+    expect(p).toContain("오늘 날짜");
+  });
+});

@@ -70,7 +70,7 @@ export async function findRelatedByLLM(personaKey: string, content: string, call
   const prompt = [
     "보험금기획팀 검토 후보와 기존 지식 항목의 유사성을 판단해, 진짜로 의미가 겹치거나 충돌하는 항목만 골라 주세요.",
     "무관하거나 단어만 흡사한 항목은 절대 포함하지 마세요. 유사한 항목이 없으면 빈 배열을 반환하세요.",
-    "JSON만 반환: {\"items\":[{\"id\":\"항목id\",\"reason\":\"유사 이유\",\"score\":0~100}]} 최대 " + limit + "개",
+    'JSON만 반환: {"items":[{"id":"항목id","reason":"유사 이유","score":0~100}]} 최대 ' + limit + '개',
     "--- 후보 내용 ---\n" + clipLine(content, 900),
     "--- 기존 지식 항목 ---\n" + list,
   ].join("\n");

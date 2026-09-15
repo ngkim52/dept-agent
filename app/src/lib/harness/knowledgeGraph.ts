@@ -37,7 +37,7 @@ export async function proposeGraphRelations(personaKey: string, items: GraphItem
     "보험금기획팀 지식 그래프를 구성합니다. 아래 활성 지식 항목 목록을 보고, 의미상 연관되는 쌍만 골라 관계를 제안하세요.",
     "관계 종류: derives(파생/이끌어냄), refutes(충돌/반박), supports(지지/보완), related(연관), source_of(출처가 됨).",
     "무관한 항목끼리는 연결하지 마세요. 최대 12개, 분명한 연관이 없으면 빈 배열을 반환하세요.",
-    "JSON만 반환: {\"edges\":[{\"fromType\":\"memory\",\"fromId\":\"id\",\"toType\":\"skill\",\"toId\":\"id\",\"rel\":\"supports\",\"reason\":\"...\"}]}",
+    'JSON만 반환: {"edges":[{"fromType":"memory","fromId":"id","toType":"skill","toId":"id","rel":"supports","reason":"..."}]}',
     "--- 항목 목록 ---\n" + list,
   ].join("\n");
   const raw = (await call(prompt)).trim();

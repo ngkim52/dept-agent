@@ -351,8 +351,9 @@ export async function runPersonaAgent(
     }
   }
 
+  const today = new Date().toISOString().slice(0, 10);
   const ragBlock = ragChunks.length
-    ? `<<<RAG_CONTEXT>>>\n${ragChunks
+    ? `<<<RAG_CONTEXT>>>\n[오늘 날짜: ${today}] 아래는 검색된 업무/회의 자료입니다. 회의록·과거 문서는 "그 시점"의 기록이므로, 현재 진행 중 여부는 기록의 날짜·완료 여부·최신 계획을 기준으로 판단하고 종료된 일을 진행 중처럼 말하지 마세요.\n${ragChunks
         .map((c, i) => `[근거 ${i + 1}] (출처: ${c.source || "알수없음"})\n${c.content}`)
         .join("\n\n")}\n<<<END_RAG_CONTEXT>>>`
     : "<<<RAG_CONTEXT>>> (검색된 자료 없음)\n<<<END_RAG_CONTEXT>>>";
