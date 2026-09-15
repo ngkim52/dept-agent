@@ -234,12 +234,12 @@ function FocusSection({ items }: { items: FocusItem[] }) {
   );
 }
 
-function KpiCards({ kpis }: { kpis: KpiCard[] }) {
+function KpiCards({ kpis, onSelect, selected }: { kpis: KpiCard[]; onSelect?: (key: string) => void; selected?: string | null }) {
   const router = useRouter();
   return (
     <div className="dab-row g5">
       {kpis.map(k => (
-        <div className="kpi" key={k.key}>
+        <div className="kpi" key={k.key} onClick={() => onSelect?.(k.key)} style={{ cursor: onSelect ? "pointer" : undefined, outline: selected === k.key ? "2px solid var(--link,#1F6C9F)" : "none", outlineOffset: -2 }}>
           <button className="kq" onClick={() => router.push(`/chat?q=${encodeURIComponent(k.label + " " + k.big + k.unit + " " + k.tag.text + " — 검증해 주세요.")}`)} title="질문하기"><Ic name="q" size={13} /></button>
           <div className="khead"><Lvl tone={k.tag.tone} size={24} icon={kpiIcon(k.key)} iconSize={12} /><h3>{k.label}</h3></div>
           <div className="kbody">
@@ -257,6 +257,51 @@ function KpiCards({ kpis }: { kpis: KpiCard[] }) {
     </div>
   );
 }
+
+function KpiDetailPanel({ detail, onClose }: { detail: any; onClose: () => void }) {
+  const maxM = Math.max(...detail.monthly, 1);
+  const mx = detail.breakdown.reduce((a: number, b: any) => Math.max(a, ...b.values), 1);
+  const pal = ["#1F6C9F", "#B08600", "#3E8E5A", "#8B5BB4", "#C05A6E"];
+  return (
+    <div className="kd" style={{ marginTop: 12, background: "var(--surface,#fff)", border: "1px solid var(--line,#EDEAE5)", borderRadius: 14, padding: "16px 18px" }}>
+      <div className="kd-head" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Lvl tone="b" size={22} icon={kpiIcon(detail.key)} iconSize={12} />
+        <h4 style={{ flex: 1, margin: 0, fontSize: 14 }}>{detail.title} 상세 (1~9월) · <span style={{ color: "var(--ink-faint)", fontWeight: 400 }}>출처: RAG 가상 데이터(정비 예정)</span></h4>
+        <button onClick={onClose} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 16, color: "var(--ink-faint)" }}>✕</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 8 }}>
+        <div>
+          <div className="eyebrow" style={{ fontSize: 10, letterSpacing: ".12em", color: "var(--ink-faint)", marginBottom: 6 }}>월별 {detail.unit}</div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 110 }}>
+            {detail.monthly.map((v: number, i: number) => (
+              <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>{Math.round(v)}</div>
+                <div style={{ height: `${(v / maxM) * 82}px`, background: pal[i % pal.length], borderRadius: "5px 5px 0 0", minHeight: 3 }} />
+                <div style={{ fontSize: 9, color: "var(--ink-faint)", marginTop: 3 }}>{detail.months[i]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="eyebrow" style={{ fontSize: 10, letterSpacing: ".12em", color: "var(--ink-faint)", marginBottom: 6 }}>하위 분류별 월별 추이</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            {detail.breakdown.map((b: any, bi: number) => (
+              <div key={bi} style={{ display: "grid", gridTemplateColumns: "46px 10px 1fr", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 10.5, color: "var(--ink-soft)" }}>{b.label}</span>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: pal[bi % pal.length] }} />
+                <svg viewBox="0 0 90 20" preserveAspectRatio="none" style={{ width: "100%", height: 16 }}>
+                  <polyline points={b.values.map((v: number, k: number) => `${(k / (b.values.length - 1)) * 88 + 1},${18 - ((v / mx) * 15)}`).join(" ")} fill="none" stroke={pal[bi % pal.length]} strokeWidth="1.6" />
+                </svg>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <style>{"@media(max-width:760px){.kd-kd-grid{grid-template-columns:1fr}}"}</style>
+    </div>
+  );
+}
+
 function kpiIcon(key: string) { return key === "loss_ratio" ? "tri" : key === "avg_days" ? "clock" : key === "fraud" ? "shield" : "doc"; }
 
 function Pipeline({ pipe, flowNote, qs }: { pipe: PipeStage[]; flowNote: string; qs: string[] }) {
@@ -319,6 +364,81 @@ function TrendChart({ dash }: { dash: ClaimDashboard }) {
         <polyline points={pts} fill="none" stroke="#9F2F2D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {t.lossRatio.map((v, i) => <circle key={i} cx={lx(i)} cy={ly(v)} r="2.4" fill="#9F2F2D" />)}
       </svg>
+    </div>
+  );
+}
+
+
+function DeadlineCard({ dash }: { dash: ClaimDashboard }) {
+  const toneColor: Record<string, string> = { a: "#B08600", r: "#C05A6E", b: "#1F6C9F" };
+  return (
+    <div className="cd">
+      <div className="cd-head"><Lvl tone="a" size={26} icon="clock" iconSize={13} /><h3>다가오는 마감</h3><QBtn label="마감 일정 질문" q="이번 달 마감 일정과 준비 현황을 정리해 주세요." icon="chev" /></div>
+      <div className="ddlist">
+        {dash.deadlines.map((d, i) => (
+          <div key={i} className="dd" style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: "1px solid var(--line,#F3F1EC)" }}>
+            <div style={{ width: 52, textAlign: "center", borderRadius: 8, background: "#F5F4F0", padding: "4px 2px" }}>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{d.day}</div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>{d.weekday}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{d.title}</div>
+              <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{d.sub}</div>
+            </div>
+            <Tag tone={toneColor[d.tone] ? (d.tone === "r" ? "r" : d.tone === "a" ? "a" : "b") : "n"}>{d.state}</Tag>
+          </div>
+        ))}
+        {dash.deadlines.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "12px 0" }}>예정된 마감이 없습니다.</div>}
+      </div>
+    </div>
+  );
+}
+
+function WorkQueueCard({ tasks, stats, reload }: { tasks: any[]; stats: any; reload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ title: "", assignee: "", dueDate: "", content: "" });
+  const st = stats ?? { total: 0, done: 0, delayed: 0, avgProgress: 0 };
+  const create = async () => {
+    if (!form.title.trim()) return;
+    await fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, assignee: form.assignee, dueDate: form.dueDate, content: form.content }) });
+    setForm({ title: "", assignee: "", dueDate: "", content: "" }); setOpen(false); reload();
+  };
+  const patch = async (id: string, p: any) => { await fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }); reload(); };
+  return (
+    <div className="cd">
+      <div className="cd-head"><Lvl tone="b" size={26} icon="bolt" iconSize={13} /><h3>부서 워크큐</h3><button onClick={() => setOpen(!open)} className="wq-add" style={{ border: "1px solid var(--line,#E8E4DD)", background: "var(--surface,#fff)", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, cursor: "pointer" }}>{open ? "닫기" : "+ 일감 생성"}</button></div>
+      <div style={{ display: "flex", gap: 10, margin: "2px 0 10px", flexWrap: "wrap" }}>
+        <span className="wq-stat" style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>전체 {st.total} · 진행 중 {st.doing ?? 0} · 완료 {st.done} · 지연 {st.delayed}</span>
+        <span style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>평균 진행률 <b>{st.avgProgress}%</b></span>
+      </div>
+      {open && (
+        <div style={{ display: "grid", gap: 6, marginBottom: 10, padding: 10, border: "1px dashed var(--line,#E0DBD3)", borderRadius: 10, background: "#FBFAF7" }}>
+          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="일감 제목" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <input value={form.assignee} onChange={e => setForm({ ...form, assignee: e.target.value })} placeholder="담당자" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
+            <input value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} placeholder="마감(예 2026-09-30)" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
+          </div>
+          <input value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} placeholder="진행 내용(주간/월간 업무 등) — RAG 등록" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
+          <button onClick={create} disabled={!form.title.trim()} style={{ padding: "7px", fontSize: 12.5, borderRadius: 8, background: "#1F6C9F", color: "#fff", border: "none", cursor: "pointer" }}>일감 등록</button>
+        </div>
+      )}
+      <div className="wqlist" style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {tasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "6px 0" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 「+ 일감 생성」으로 등록하세요.</div>}
+        {tasks.map((t) => (
+          <div key={t.id} style={{ border: "1px solid var(--line,#EDEAE5)", borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Tag tone={t.status === "done" ? "g" : t.status === "delayed" ? "r" : t.status === "doing" ? "b" : "n"}>{t.status === "doing" ? "진행" : t.status === "done" ? "완료" : t.status === "delayed" ? "지연" : "대기"}</Tag>
+              <b style={{ fontSize: 12.5, flex: 1 }}>{t.title}</b>
+              <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>{t.assignee || ""}{t.dueDate ? " · " + t.dueDate : ""}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
+              <div style={{ flex: 1, height: 6, borderRadius: 4, background: "#EFECE6" }}><div style={{ width: `${t.progress ?? 0}%`, height: 6, borderRadius: 4, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
+              <span style={{ fontSize: 11 }}>{t.progress ?? 0}%</span>
+              {t.status !== "done" && <button onClick={() => patch(t.id, { progress: (t.progress ?? 0) >= 90 ? 0 : (t.progress ?? 0) + 25 })} style={{ fontSize: 10.5, border: "1px solid var(--line)", background: "#fff", borderRadius: 6, padding: "2px 6px", cursor: "pointer" }}>+25%</button>}
+              {t.status === "delayed" && <span style={{ fontSize: 10.5, color: "#C05A6E" }}>서면 보고 지시</span>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -445,7 +565,7 @@ function ChatPanel({ dash }: { dash: ClaimDashboard | null }) {
 }
 
 
-function DirectorNote({ review, onMeeting }: { review: SectionReview | null; onMeeting: (review: SectionReview) => void }) {
+function DirectorNote({ review, onMeeting, onTask }: { review: SectionReview | null; onMeeting: (review: SectionReview) => void; onTask?: (title: string) => void }) {
   if (!review) return null;
   const teams = review.teams ?? {};
   const teamsEntries = Object.entries(teams);
@@ -481,7 +601,8 @@ function DirectorNote({ review, onMeeting }: { review: SectionReview | null; onM
                   <span style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, color: pc.fg, background: pc.bg, borderRadius: 7, padding: "2px 8px", border: "1px solid " + pc.bg }}>{part}</span>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {items.map((t, j) => (
-                      <span key={j} style={{ fontSize: 10.5, color: "var(--ink,#1C1917)", background: "#FFFFFF", border: "1px solid #E3E0DB", borderRadius: 7, padding: "2px 8px" }}>{t}</span>
+                      <button key={j} title="클릭하면 부서 워크큐에 일감으로 등록" onClick={() => onTask?.(t)}
+                        style={{ fontSize: 10.5, color: "var(--ink,#1C1917)", background: "#FFFFFF", border: "1px solid #E3E0DB", borderRadius: 7, padding: "2px 8px", cursor: onTask ? "pointer" : "default" }}>{t}</button>
                     ))}
                   </div>
                 </div>
@@ -570,6 +691,8 @@ export default function Dashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashData | null>(null);
   const [err, setErr] = useState("");
+  const [workTasks, setWorkTasks] = useState<any[]>([]);
+  const [workStats, setWorkStats] = useState<any>(null);
   useEffect(() => {
     let on = true;
     (async () => {
@@ -579,13 +702,18 @@ export default function Dashboard() {
         const d = await res.json();
         if (!res.ok || !d?.dash) { if (on) setErr(d?.error ?? "대시보드 데이터를 불러오지 못했습니다."); return; }
         if (on) setData(d);
+        if (on) { setWorkTasks(d.workTasks ?? []); setWorkStats(d.workStats ?? null); }
       } catch { if (on) setErr("대시보드 데이터를 불러오지 못했습니다."); }
     })();
     return () => { on = false; };
   }, [router]);
 
+  const loadWork = () => fetch("/api/workqueue").then(r => r.json()).then(d => { setWorkTasks(d.tasks ?? []); setWorkStats(d.stats ?? null); }).catch(() => {});
+  const makeTask = (title: string) => fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, source: "director_note" }) }).then(loadWork).catch(() => {});
   const dash = data?.dash;
   const [meeting, setMeeting] = useState<SectionReview | null>(null);
+  const [selKpi, setSelKpi] = useState<string | null>(null);
+  const selKpiDetail = dash?.kpiDetails?.find((kd: any) => kd.key === selKpi) ?? null;
   return (
     <div className="dab-root">
       {meeting && <MeetingModal review={meeting} onClose={() => setMeeting(null)} />}
@@ -614,26 +742,39 @@ export default function Dashboard() {
             <FocusSection items={dash.focusItems} />
 
             <SectionTitle title={`핵심 KPI · ${curMonth(dash)} 실적`} note="지급보험금 중심 지표" />
-            <KpiCards kpis={dash.kpis} />
-            <DirectorNote review={reviewsBy(data, "kpi")} onMeeting={(r) => setMeeting(r)} />
+            <KpiCards kpis={dash.kpis} onSelect={(key: string) => setSelKpi(selKpi === key ? null : key)} selected={selKpi} />
+            {selKpiDetail && <KpiDetailPanel detail={selKpiDetail} onClose={() => setSelKpi(null)} />}
+            <DirectorNote review={reviewsBy(data, "kpi")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} />
 
             <SectionTitle title="지급보험금 처리 흐름" note={`${curMonth(dash)} 실적 · 클릭하면 해당 단계 질문`} />
             <Pipeline pipe={dash.pipeline} flowNote={dash.pipelineFlowNote} qs={[]} />
-            <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} />
+            <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
-              <div className="cd">
-                <div className="cd-head"><Lvl tone="n" icon="chart" /><h3>월별 지급보험금 · 손해율 추이</h3><QBtn label="추이 질문" q="지급보험금과 손해율 추이의 원인과 하반기 전망을 분석해 주세요." icon="chev" /></div>
-                <TrendChart dash={dash} />
-              </div>
-              <QueueCard dash={dash} />
+              <DeadlineCard dash={dash} />
+              <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} />
             </div>
 
-            <SectionTitle title="업무 진도 · 모니터링" note={`${curMonth(dash)} 실적 누적`} />
+            <SectionTitle title="업무 진도 · 모니터링" note={`${curMonth(dash)} 실적 누적 · 부서 워크큐 반영`} />
             <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(3,minmax(0,1fr))" }}>
               {dash.monitors.map(m => <MonitorCard key={m.key} m={m} />)}
             </div>
-            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} />
+            {workTasks.filter(t => t.status !== "done").length > 0 && (
+              <div style={{ marginTop: 12, padding: "10px 14px", border: "1px solid var(--line,#EDEAE5)", borderRadius: 12, background: "var(--surface,#fff)" }}>
+                <div className="eyebrow" style={{ fontSize: 10, letterSpacing: ".12em", color: "var(--ink-faint)", marginBottom: 6 }}>부서 워크큐 진행 현황</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {workTasks.filter(t => t.status !== "done").map(t => (
+                    <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 12, flex: 1 }}>{t.title}</span>
+                      <div style={{ width: 140, height: 7, borderRadius: 4, background: "#EFECE6" }}><div style={{ width: `${t.progress ?? 0}%`, height: 7, borderRadius: 4, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
+                      <span style={{ fontSize: 11, width: 34 }}>{t.progress ?? 0}%</span>
+                      {t.status === "delayed" && <span style={{ fontSize: 10.5, color: "#C05A6E" }}>서면 보고 지시</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={makeTask} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <NewsCard fss={dash.fssNews} ins={dash.insNews} />

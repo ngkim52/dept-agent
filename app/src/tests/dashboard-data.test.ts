@@ -60,4 +60,14 @@ describe("RAGFlow 적재 명세 — 올해(12월까지) 연간 데이터", () =>
     const total = seedDatasets.reduce((a, d) => a + d.docs.length, 0);
     expect(total).toBe(38);
   });
+  it("KPI 상세(kpiDetails)는 5개 카드 모두 포함 (018-4)", () => {
+    const dash = buildDashboardData();
+    expect(dash.kpiDetails).toHaveLength(5);
+    const keys = dash.kpiDetails.map(k => k.key);
+    for (const k of ["cum_paid", "loss_ratio", "claims_aug", "avg_days", "fraud"]) expect(keys).toContain(k);
+    const cum = dash.kpiDetails.find(k => k.key === "cum_paid")!;
+    expect(cum.months).toHaveLength(9);
+    expect(cum.breakdown.map(b => b.label)).toEqual(["사망", "장해", "진단", "입원", "실손"]);
+    expect(cum.breakdown.every(b => b.values.length === 9)).toBe(true);
+  });
 });

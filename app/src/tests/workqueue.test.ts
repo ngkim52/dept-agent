@@ -1,0 +1,46 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { resetDb, withDept } from "./helpers";
+import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, syncTaskToRag } from "@/lib/harness/workQueue";
+
+beforeEach(async () => { await resetDb(); await withDept(); });
+
+describe("부서 워크큐 (018-B)", () => {
+  it("일감 생성 → 목록/단건 조회 + 기본값", async () => {
+    const t = await createWorkTask({ personaKey: "claims-planning", title: "손해율 목표 관리", assignee: "김심사", dueDate: "2026-09-25", category: "월간" }, "user-1");
+    expect(t.id).toBeTruthy();
+    expect(t.status).toBe("todo");
+    expect(t.progress).toBe(0);
+    expect(t.ragSynced).toBe(true);
+    const list = await listWorkTasks({ personaKey: "claims-planning" });
+    expect(list).toHaveLength(1);
+    expect((await getWorkTask(t.id))!.title).toBe("손해율 목표 관리");
+  });
+
+  it("진행률/상태 갱신 + 통계", async () => {
+    const t = await createWorkTask({ personaKey: "claims-planning", title: "9월 손해율 점검" }, "user-1");
+    await updateWorkTask(t.id, { progress: 50, status: "doing", content: "주간 업무 2주차" });
+    const u = (await getWorkTask(t.id))!;
+    expect(u.progress).toBe(50);
+    expect(u.status).toBe("doing");
+    const st = await taskStats("claims-planning");
+    expect(st.total).toBe(1);
+    expect(st.doing).toBe(1);
+    expect(st.avgProgress).toBe(50);
+  });
+
+  it("지연 일감은 서면보고 지시 문구 생성", async () => {
+    const t = await createWorkTask({ personaKey: "claims-planning", title: "실손 마감", assignee: "박계리" }, "user-1");
+    await updateWorkTask(t.id, { status: "delayed" });
+    const d = reportNotice((await getWorkTask(t.id))!);
+    expect(d).toContain("지연");
+    expect(d).toContain("박계리");
+    expect(d).toContain("서면 보고");
+  });
+
+  it("RAG 동기화 시 문서로 저장", async () => {
+    const t = await createWorkTask({ personaKey: "claims-planning", title: "진단 3일 내 처리", content: "전 산정 부분 일괄 정비", dueDate: "2026-09-20" }, "user-1");
+    const st = await taskStats();
+    expect(st.total).toBe(1);
+    expect(t.ragSynced).toBe(true);
+  });
+});

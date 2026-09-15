@@ -55,6 +55,30 @@ try {
   CREATE INDEX IF NOT EXISTS qa_link_from_idx ON qa_links (from_id);`);
 } catch { /* 무시 */ }
 
+
+// 부서 워크큐(018-B) 물리 테이블 보장 — 마이그레이션 저널 백필에도 실제 테이블 있게
+try {
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS work_tasks (
+    id text PRIMARY KEY NOT NULL,
+    persona_key text DEFAULT 'claims-planning' NOT NULL,
+    title text NOT NULL,
+    assignee text,
+    category text,
+    due_date text,
+    status text DEFAULT 'todo' NOT NULL,
+    progress integer DEFAULT 0 NOT NULL,
+    source text DEFAULT 'direct' NOT NULL,
+    director_note_ref text,
+    content text,
+    rag_synced integer DEFAULT 0 NOT NULL,
+    created_by text,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS wq_persona_idx ON work_tasks (persona_key);
+  CREATE INDEX IF NOT EXISTS wq_status_idx ON work_tasks (status);`);
+} catch { /* 무시 */ }
+
 function syncMigrationJournal() {
   try {
     const journalPath = path.join(migrationsFolder, "meta", "_journal.json");

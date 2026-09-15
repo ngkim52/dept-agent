@@ -16,6 +16,7 @@ export async function resetDb() {
   await db.delete(schema.knowledgeMemories);
   await db.delete(schema.knowledgeSkills);
   await db.delete(schema.knowledgePrompts);
+  await db.delete(schema.workTasks);
   await db.delete(schema.users);
   await db.delete(schema.departments);
 }
