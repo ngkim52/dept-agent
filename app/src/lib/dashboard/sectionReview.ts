@@ -7,6 +7,8 @@ import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { getLlmModel } from "@/lib/agent/llm";
 import { kstDateStr } from "@/lib/dates";
+import { ragflow } from "@/lib/ragflow/client";
+import { getDepartmentDatasets } from "@/lib/dataset/access";
 import type { ClaimDashboard } from "./dashboardData";
 
 export type SectionReview = {
@@ -38,20 +40,22 @@ export function sectionTitles(dash: ClaimDashboard) {
   };
 }
 
-export function buildReviewPrompt(dash: ClaimDashboard): string {
+export function buildReviewPrompt(dash: ClaimDashboard, ragContext = ""): string {
   const titles = sectionTitles(dash);
   const kpi = dash.kpis.map((k) => `- ${k.label}: ${k.big}${k.unit} (${k.tag.text})`).join("\n");
   const pipe = dash.pipeline.map((p) => `- ${p.label}: ${p.num}${p.unit}`).join("\n");
   const mon = dash.monitors.map((m) => `- ${m.title}: ${m.big}${m.bigUnit} (${m.gaugeLabel} ${m.gaugePct}%)`).join("\n");
-  return `당신은 보험금심사기획팀 부서장입니다. 아래 대시보드 섹션 데이터를 보고, 각 섹션에 대해 "검토사항(summary)"과 "부서원이 해야 할 일(actions)"을 담은 부서장 의견을 작성하세요.
+  const rag = ragContext && ragContext.trim()
+    ? `\n[참고 지식(RAG)]\n${ragContext.trim()}\n`
+    : "";
+  return `당신은 보험금심사기획팀 부서장입니다. 아래 대시보드 섹션 데이터와 참고 지식(RAG)을 활용해, '실적 기준으로 구체적인 업무 지시'처럼 각 섹션에 대해 "검토사항(summary)"과 "부서원이 해야 할 일(actions)"을 담은 부서장 의견을 작성하세요.
 
 [${titles.kpi}]
 ${kpi}
 [${titles.pipeline}]
 ${pipe}
 [${titles.monitor}]
-${mon}
-
+${mon}${rag}
 추가 지침:
 - 각 섹션의 summary(1~2문장)를 바탕으로, 파트별 할 일(teams)을 구성하세요. 파트는 정확히 3개 키 중에서만 사용: "시스템", "기획", "품질점검". 할 일이 전혀 없는 파트는 teams에 포함하지 마세요(빈 배열 금지). 각 파트는 할 일 1~3개(각 최대 25자).
 - 특정 섹션에 회의가 필요하다고 판단되면 needsMeeting: true 로 하고, meetingDraft에 회의안 초본을 마크다운으로 작성하세요. 회의안 형식: # 제목 / - 목적: / ## 안건 (각 1~2문장) / ## 결정 필요 사항. 일정·참석자는 사용자가 직접 채우므로 비워두세요.
@@ -108,6 +112,33 @@ async function writeCache(cache: Cache) {
 /** 섹션 리뷰 반환.
  *  - 당일 캐시 존재 시 그대로 사용 (일간 1회 생성/보여주기)
  *  - 아니면 반드시 LLM으로 생성. 실패 시 정적 fallback 대신 [] 반환(더미 데이터 금지). */
+
+/** 대시보드 실적 항목과 관련된 부서 RAG 지식을 조회해 참고자료로 반환 (실패·부재 시 빈 문자열) */
+export async function buildReviewRagContext(dash: ClaimDashboard): Promise<string> {
+  const datasetIds = await getDepartmentDatasets("claims-planning");
+  if (!datasetIds.length) return "";
+  const loss = dash.kpis.find((k) => k.key === "loss_ratio");
+  const days = dash.kpis.find((k) => k.key === "avg_days");
+  const auto = dash.monitors.find((m) => m.key === "ai");
+  const fraud = dash.kpis.find((k) => k.key === "fraud");
+  const queries = [
+    loss ? `손해율 ${loss.big}% 목표 초과 개선·심사 기준` : "손해율 개선 방안",
+    days ? `지급보험금 평균 소요 ${days.big}일 단축` : "지급 처리 소요일 단축",
+    auto ? `자동심사 적용률 ${auto.gaugePct}% 확대` : "자동심사 적용률 확대",
+    fraud ? `보험사기 적발 ${fraud.big}건 강화` : "보험사기 적발 강화",
+  ];
+  const parts: string[] = [];
+  for (const q of queries) {
+    try {
+      const chunks = await ragflow.retrieve(q, datasetIds, 3);
+      for (const c of chunks) if (c?.content?.trim()) parts.push(c.content.trim());
+    } catch { /* 개별 조회 실패 무시 */ }
+  }
+  const seen = new Set<string>();
+  const uniq = parts.filter((x) => { const k = x.trim(); if (!k || seen.has(k)) return false; seen.add(k); return true; });
+  return uniq.slice(0, 12).join("\n");
+}
+
 export async function getSectionReviews(dash: ClaimDashboard, force = false): Promise<SectionReview[]> {
   const now = todayStr();
   if (!force) {
@@ -116,7 +147,8 @@ export async function getSectionReviews(dash: ClaimDashboard, force = false): Pr
   }
   try {
     const { models, model } = await getLlmModel("simple");
-    const prompt = buildReviewPrompt(dash);
+    const ragContext = await buildReviewRagContext(dash).catch(() => "");
+    const prompt = buildReviewPrompt(dash, ragContext);
     const res = await models.completeSimple(model, { messages: [{ role: "user" as const, content: prompt, timestamp: Date.now() }] });
     const text = (res?.content ?? []).filter((t) => t?.type === "text").map((t) => t.text).join("");
     const parsed = parseReviews(text.replace(/```json|```/g, ""));

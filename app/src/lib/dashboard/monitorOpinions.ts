@@ -11,7 +11,7 @@ export type ScheduleRow = { date: string; time?: string | null; title: string; n
 
 export const MONITOR_OPINION_SOURCE = "monitor-llm";
 
-export function buildMonitorOpinionPrompt(tasks: OpinionTask[], schedule: ScheduleRow[]): string {
+export function buildMonitorOpinionPrompt(tasks: OpinionTask[], schedule: ScheduleRow[], perfSummary = ""): string {
   const lines = tasks.map((t, i) => {
     const due = t.dueDate ? (t.dueLeft != null ? `${t.dueDate} (D${t.dueLeft >= 0 ? "+" + t.dueLeft : t.dueLeft})` : t.dueDate) : "미정";
     return `${i + 1}. 제목: ${t.title} | 상태: ${t.status} | 담당: ${t.assignee ?? "미지정"} | 기한: ${due} | 진행률: ${t.progress ?? 0}% | 내용: ${t.content ?? "(없음)"}`;
@@ -20,11 +20,15 @@ export function buildMonitorOpinionPrompt(tasks: OpinionTask[], schedule: Schedu
     ? schedule.sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")))
         .map(s => `${s.date}${s.time ? " " + s.time : ""} - ${s.title}${s.note ? " (" + s.note + ")" : ""}`).join("\n")
     : "(등록된 부서장 일정 없음)";
+  const perf = perfSummary && perfSummary.trim()
+    ? `[현재 실적(참고)]\n${perfSummary.trim()}\n\n`
+    : "";
   return [
     "당신은 보험금 심사 부서의 부서장입니다. 아래 업무진도 모니터링의 일감 각각에 대해 간결한 부서장 의견(지시/조언, 1~2문장)을 한국어로 작성하세요.",
+    "현재 실적과 부서 RAG 지식을 참고해, 구체적인 업무 지시를 내리세요.",
     "종료(status=done)된 일감에는 부서장 일정을 참고해 '보고 시간'(보고하는 것이 좋은 시각)도 추천하세요. 가능하면 일정과 겹치지 않는 시간(HH:MM)을 제안하세요.",
     "",
-    "부서장 일정:",
+    perf + "부서장 일정:",
     sched,
     "",
     "일감 목록:",
@@ -76,6 +80,18 @@ export function dueGap(date?: string | null): number | undefined {
 
 export const OPINION_NO_RAG_FALLBACK = "RAG에서 해당 업무 관련 자료가 확인되지 않습니다. 담당자는 부서장에게 결과 보고를 진행하세요.";
 
+/** 현재 대시보드 실적(KPI)을 한 줄 요약해 부서장 의견 생성 프롬프트에 참고로 제공 */
+export async function buildPerfSummary(): Promise<string> {
+  try {
+    const { claimDashboard } = await import("@/lib/dashboard/dashboardData");
+    const kpis = claimDashboard.kpis ?? [];
+    if (!kpis.length) return "";
+    return kpis
+      .map((k: any) => `${k.label}: ${k.big}${k.unit} (${k.tag?.text ?? ""})`)
+      .join(" | ");
+  } catch { return ""; }
+}
+
 export async function generateMonitorOpinions(opts: GenerateMonitorOptions = {}): Promise<MonitorOpinion[]> {
   const tasks = await listWorkTasks();
   const schedule = await listDirectorSchedule();
@@ -112,7 +128,8 @@ export async function generateMonitorOpinions(opts: GenerateMonitorOptions = {})
   }
 
   if (llmTasks.length) {
-    const prompt = buildMonitorOpinionPrompt(llmTasks, schedule.map(s => ({ date: s.date, time: s.time, title: s.title, note: s.note })));
+    const perfSummary = await buildPerfSummary();
+    const prompt = buildMonitorOpinionPrompt(llmTasks, schedule.map(s => ({ date: s.date, time: s.time, title: s.title, note: s.note })), perfSummary);
     let raw: string;
     if (opts.call) {
       raw = (await opts.call(prompt)).trim();

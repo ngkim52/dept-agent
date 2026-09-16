@@ -16,6 +16,13 @@ describe("업무진도 모니터링 일감별 부서장 의견 (018-C)", () => {
     expect(p).toContain("status=done");
   });
 
+  it("실적 요약(perfSummary)이 있으면 프롬프트에 참고 자료로 포함", () => {
+    const p = buildMonitorOpinionPrompt(tasks as any, schedule, "누적 지급보험금: 3831억 원 (전년 동기 +6.8%) | 지급 손해율: 83.1% (목표 +4.1%p 초과)");
+    expect(p).toContain("[현재 실적(참고)]");
+    expect(p).toContain("지급 손해율: 83.1%");
+    expect(p).toContain("구체적인 업무 지시");
+  });
+
   it("LLM 응답 파싱 — 종료 일감 보고 시간 매핑", () => {
     const raw = JSON.stringify([
       { title: "수동심사 우선순위 개선", opinion: "담당자가 진행 중이니 일정에 맞추어 마무리하세요." },
@@ -26,6 +33,13 @@ describe("업무진도 모니터링 일감별 부서장 의견 (018-C)", () => {
     const done = out.find(o => o.title === "지급 심사분 일괄 정비");
     expect(done!.reportTime).toBe("14:00");
     expect(done!.status).toBe("done");
+  });
+
+  it("실적 요약(perfSummary)이 있으면 프롬프트에 참고 자료로 포함", () => {
+    const p = buildMonitorOpinionPrompt(tasks as any, schedule, "누적 지급보험금: 3831억 원 (전년 동기 +6.8%) | 지급 손해율: 83.1% (목표 +4.1%p 초과)");
+    expect(p).toContain("[현재 실적(참고)]");
+    expect(p).toContain("지급 손해율: 83.1%");
+    expect(p).toContain("구체적인 업무 지시");
   });
 
   it("RAG 자료 없음 시 결과 보고 지시 기본 문구 사용", () => {
