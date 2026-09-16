@@ -1,5 +1,5 @@
 "use client";
-import { dueWithinDays } from "@/lib/harness/workQueue";
+import { dueWithinDays } from "@/lib/dashboard/deadlines";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
