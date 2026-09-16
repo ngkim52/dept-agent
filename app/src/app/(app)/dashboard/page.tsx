@@ -1,4 +1,5 @@
 "use client";
+import { dueWithinDays } from "@/lib/harness/workQueue";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -369,30 +370,36 @@ function TrendChart({ dash }: { dash: ClaimDashboard }) {
 }
 
 
-function DeadlineCard({ dash }: { dash: ClaimDashboard }) {
-  const toneColor: Record<string, string> = { a: "#B08600", r: "#C05A6E", b: "#1F6C9F" };
+function DeadlineCard({ tasks }: { tasks: any[] }) {
+  // 등록된 일감 기준: 기한이 오늘 ~ 1주일 이내(및 기한 지난 지연분) 인 것만 "다가오는 마감"으로 표시
+  const today = new Date();
+  const wd = ["일", "월", "화", "수", "목", "금", "토"];
+  const due = dueWithinDays(tasks ?? [], 7, today);   // 기한순 (지연분 포함,에 오름차순)
   return (
     <div className="cd">
-      <div className="cd-head"><Lvl tone="a" size={26} icon="clock" iconSize={13} /><h3>다가오는 마감</h3><QBtn label="마감 일정 질문" q="이번 달 마감 일정과 준비 현황을 정리해 주세요." icon="chev" /></div>
+      <div className="cd-head"><Lvl tone="a" size={26} icon="clock" iconSize={13} /><h3>다가오는 마감</h3><QBtn label="마감 일정 질문" q="이번 주 마감 일정과 준비 현황을 정리해 주세요." icon="chev" /></div>
       <div className="ddlist">
-        {dash.deadlines.map((d, i) => (
-          <div key={i} className="dd" style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: "1px solid var(--line,#F3F1EC)" }}>
-            <div style={{ width: 52, textAlign: "center", borderRadius: 8, background: "#F5F4F0", padding: "4px 2px" }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{d.day}</div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>{d.weekday}</div>
+        {due.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "12px 0" }}>1주일 이내(최근 지연 포함) 마감 일감이 없습니다.</div>}
+        {due.map(({ task: t, overdue, daysLeft }) => {
+          const [y, m, dd] = t.dueDate!.split("-");
+          const w = wd[new Date(Number(y), Number(m) - 1, Number(dd)).getDay()];
+          return (
+            <div key={t.id} className="dd" style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: "1px solid var(--line,#F3F1EC)" }}>
+              <div style={{ width: 52, textAlign: "center", borderRadius: 8, background: overdue ? "#FBEAE9" : "#F5F4F0", padding: "4px 2px" }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{dd}</div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>{w + "요일"}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{t.title}</div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{t.assignee || "담당 미지정"}{t.category ? " · " + t.category : ""}</div>
+              </div>
+              <Tag tone={overdue ? "r" : t.status === "delayed" ? "r" : t.status === "doing" ? "b" : "n"}>{overdue ? "지연" : daysLeft === 0 ? "오늘" : `D-${daysLeft}`}</Tag>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{d.title}</div>
-              <div style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{d.sub}</div>
-            </div>
-            <Tag tone={toneColor[d.tone] ? (d.tone === "r" ? "r" : d.tone === "a" ? "a" : "b") : "n"}>{d.state}</Tag>
-          </div>
-        ))}
-        {dash.deadlines.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "12px 0" }}>예정된 마감이 없습니다.</div>}
+          );
+        })}
       </div>
     </div>
   );
 }
-
 function WorkQueueCard({ tasks, stats, reload, onDelete }: { tasks: any[]; stats: any; reload: () => void; onDelete?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", assignee: "", dueDate: "", content: "" });
@@ -784,7 +791,7 @@ export default function Dashboard() {
             <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
-              <DeadlineCard dash={dash} />
+              <DeadlineCard tasks={workTasks} />
               <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} onDelete={delTask} />
             </div>
 

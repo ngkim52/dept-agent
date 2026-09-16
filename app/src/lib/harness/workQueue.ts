@@ -104,3 +104,19 @@ export async function taskStats(personaKey?: string): Promise<{ total: number; d
   const avgProgress = total ? Math.round(rows.reduce((a, r) => a + (r.progress ?? 0), 0) / total) : 0;
   return { total, done, doing, todo, delayed, avgProgress };
 }
+
+// 등록 일감의 "다가오는 마감" 판정 시그니처: 기한이 오늘~N일 이내(및 기한 지난 지연분)만 반환, 기한순 정렬
+export function dueWithinDays(tasks: WorkTask[], days = 7, now: Date = new Date()): { task: WorkTask; overdue: boolean; daysLeft: number }[] {
+  const fc = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayStr = fc(now);
+  const cut = new Date(now); cut.setDate(cut.getDate() + days);
+  const cutStr = fc(cut);
+  const list = (tasks ?? [])
+    .filter(t => t.status !== "done" && t.dueDate && t.dueDate <= cutStr)
+    .sort((a, b) => (a.dueDate! < b.dueDate! ? -1 : 1));
+  const parse = (s?: string | null) => s ? new Date(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10))) : now;
+  return list.map(task => {
+    const d = parse(task.dueDate);
+    return { task, overdue: (task.dueDate ?? "") < todayStr, daysLeft: Math.ceil((d.getTime() - now.getTime()) / 86400000) };
+  });
+}
