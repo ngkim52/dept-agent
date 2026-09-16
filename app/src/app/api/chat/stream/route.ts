@@ -145,6 +145,15 @@ export async function POST(req: NextRequest) {
             else if (ev.type === "done") send("progress", { phase: "done" });
           },
         }, { thinkingLevel, uploadFiles }, { categoryKey: conversation.categoryKey ?? null, style: user.responseStyle ?? "coaching" });
+        // 부장님 의견: 지식 답변 위에 실제 부서장이 하는 의견·지시 추가 (실패 시 생략)
+        try {
+          const { generateDirectorAdvice, DIRECTOR_ADVICE_HEADING } = await import("@/lib/chat/directorAdvice");
+          const ragText = (chunks ?? []).map((c: { content?: string }) => c.content ?? "").filter(Boolean).join("\n");
+          const opinion = await generateDirectorAdvice({ question: message, ragContent: ragText });
+          if (opinion && opinion.trim()) {
+            assistantText = assistantText.trim() + "\n\n---\n\n" + DIRECTOR_ADVICE_HEADING + "\n\n" + opinion.trim();
+          }
+        } catch { /* 부장님 의견 실패 — 답변은 정상 */ }
         // 근거(citations) 통합: RAG 청크 + 웹 검색 결과 (외부 링크 포함)
         const citations = [
           ...chunks.map(c => ({ type: "rag", source: c.source, content: c.content, similarity: c.similarity })),
