@@ -15,6 +15,7 @@ const PATHS: Record<string, string> = {
   bolt: "M13 2L4 14h6l-1 8 9-12h-6z",
   tri: "M12 3l9 18H3z",
   clock: "M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3 3",
+  cal: "M6 3v3M18 3v3M4 8h16M6 5h12a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2zM7 12h2M11 12h2M15 12h2M7 16h2M11 16h2",
   shield: "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z",
   chk: "M5 13l4 4L19 7",
   search: "M11 19a8 8 0 100-16 8 8 0 000 16zM20 20l-4-4",
@@ -401,6 +402,46 @@ function DeadlineCard({ tasks }: { tasks: any[] }) {
     </div>
   );
 }
+function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd: (v: { date: string; time: string; title: string; note: string }) => void; onDelete: (id: string) => void }) {
+  const [f, setF] = useState({ date: "", time: "", title: "", note: "" });
+  const today = new Date().toISOString().slice(0, 10);
+  const sorted = [...items].sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")));
+  const wd = ["일", "월", "화", "수", "목", "금", "토"];
+  return (
+    <div className="cd">
+      <div className="cd-head"><Lvl tone="a" size={26} icon="cal" iconSize={13} /><h3>부서장 일정</h3><span style={{ fontSize: 10, color: "var(--ink-faint)", fontFamily: "var(--mono,monospace)" }}>수동 입력</span></div>
+      <div style={{ display: "grid", gap: 7, marginBottom: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 7 }}>
+          <input value={f.date} onChange={e => setF({ ...f, date: e.target.value })} placeholder="날짜 (YYYY-MM-DD)" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+          <input value={f.time} onChange={e => setF({ ...f, time: e.target.value })} placeholder="시간 (예 14:00)" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+        </div>
+        <input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+        <input value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="메모 (선택)" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+        <button onClick={() => { if (!f.date || !f.title.trim()) return; onAdd(f); setF({ date: "", time: "", title: "", note: "" }); }} style={{ padding: "7px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "#8A6116", border: "none", borderRadius: 8, cursor: "pointer" }}>일정 등록</button>
+      </div>
+      <div className="ddlist">
+        {sorted.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "10px 0" }}>등록된 부서장 일정이 없습니다.</div>}
+        {sorted.map(it => {
+          const [y, m, dd] = String(it.date).split("-");
+          const w = wd[new Date(Number(y), Number(m) - 1, Number(dd)).getDay()];
+          return (
+            <div key={it.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid var(--line,#F3F1EC)" }}>
+              <div style={{ width: 52, textAlign: "center", borderRadius: 8, background: it.date === today ? "#F6EFDF" : "#F5F4F0", padding: "4px 2px" }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{dd}</div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>{it.date === today ? "오늘" : w + "요일"}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{it.title}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{it.time ? it.time : ""}{it.note ? " · " + it.note : ""}</div>
+              </div>
+              <button onClick={() => onDelete(it.id)} title="삭제" style={{ fontSize: 10, border: "1px solid #E3E0DB", background: "#fff", borderRadius: 6, padding: "1px 6px", color: "#9F2F2D", cursor: "pointer" }}>삭제</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function WorkQueueCard({ tasks, stats, reload, onDelete }: { tasks: any[]; stats: any; reload: () => void; onDelete?: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", assignee: "", dueDate: "", content: "" });
@@ -731,6 +772,8 @@ export default function Dashboard() {
   const [err, setErr] = useState("");
   const [workTasks, setWorkTasks] = useState<any[]>([]);
   const [workStats, setWorkStats] = useState<any>(null);
+  const [schedule, setSchedule] = useState<any[]>([]);
+  const [opinions, setOpinions] = useState<Record<string, { opinion: string; reportTime?: string; status?: string }>>({});
   useEffect(() => {
     let on = true;
     (async () => {
@@ -746,10 +789,16 @@ export default function Dashboard() {
     return () => { on = false; };
   }, [router]);
 
+  useEffect(() => { loadSchedule(); loadOpinions(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
   const loadWork = () => fetch("/api/workqueue").then(r => r.json()).then(d => { setWorkTasks(d.tasks ?? []); setWorkStats(d.stats ?? null); }).catch(() => {});
+  const loadSchedule = () => fetch("/api/schedule").then(r => r.json()).then(d => setSchedule(d.items ?? [])).catch(() => {});
+  const loadOpinions = () => fetch("/api/dashboard/monitor-opinions").then(r => r.json()).then(d => { const m: Record<string, any> = {}; (d.opinions ?? []).forEach((o: any) => { m[o.title] = o; }); setOpinions(m); }).catch(() => {});
   const openTaskForm = (title: string) => { if (workTasks.some((w) => w.title === title)) return; setTaskDraft({ title, assignee: "", dueDate: "", content: "" }); };
   const submitTask = () => { if (!taskDraft?.title?.trim()) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: taskDraft.title, assignee: taskDraft.assignee, dueDate: taskDraft.dueDate, content: taskDraft.content, source: "director_note" }) }).then(loadWork).then(() => setTaskDraft(null)).catch(() => {}); };
   const delTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "DELETE" }).then(loadWork).catch(() => {});
+  const delSchedule = (id: string) => fetch(`/api/schedule/${id}`, { method: "DELETE" }).then(loadSchedule).catch(() => {});
+  const addSchedule = (v: { date: string; time: string; title: string; note: string }) => fetch("/api/schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) }).then(loadSchedule).catch(() => {});
   const dash = data?.dash;
   const [meeting, setMeeting] = useState<SectionReview | null>(null);
   const [selKpi, setSelKpi] = useState<string | null>(null);
@@ -791,17 +840,31 @@ export default function Dashboard() {
             <Pipeline pipe={dash.pipeline} flowNote={dash.pipelineFlowNote} qs={[]} />
             <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
-            <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
-              <DeadlineCard tasks={workTasks} />
-              <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} onDelete={delTask} />
-            </div>
 
-            <SectionTitle title="업무 진도 · 모니터링" note={`부서 워크큐 일감 ${workTasks.length}건`} />
+            <SectionTitle title="업무 진도 · 모니터링" note={`부서 워크큐 일감 ${workTasks.length}건 · 일감별 부서장 의견은 LLM 자동 생성`} />
             <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
               {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 부서 워크큐에서 일감을 생성하세요.</div>}
-              {workTasks.map(t => <MonRow key={t.id} t={t} onDelete={delTask} />)}
+              {workTasks.map(t => {
+                const op = opinions[t.title];
+                return (
+                  <div key={t.id}>
+                    <MonRow t={t} onDelete={delTask} />
+                    {op && (
+                      <div style={{ marginTop: 8, borderLeft: "3px solid #B08600", background: "#FBF6EA", borderRadius: 8, padding: "7px 9px", fontSize: 11, lineHeight: 1.5, color: "var(--ink,#1C1917)" }}>
+                        <div style={{ fontWeight: 700, color: "#8A6116", marginBottom: 2 }}>부서장 의견{op.status === "done" ? op.reportTime ? ` · 보고 ${op.reportTime} 추천` : "" : " · LLM 자동"}</div>
+                        {op.opinion}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <DirectorNote review={reviewsBy(data, "monitor")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
+
+            <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
+              <DirectorScheduleCard items={schedule} onAdd={addSchedule} onDelete={delSchedule} />
+              <DeadlineCard tasks={workTasks} />
+            </div>
+            <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} onDelete={delTask} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <NewsCard fss={dash.fssNews} ins={dash.insNews} />

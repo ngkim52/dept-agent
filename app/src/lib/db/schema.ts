@@ -351,5 +351,22 @@ export const workTasks = sqliteTable("work_tasks", {
   wqPersonaIdx: index("wq_persona_idx").on(t.personaKey),
   wqStatusIdx: index("wq_status_idx").on(t.status),
 }));
+
+// ── 부서장 일정 캘린더 (부서장 직접 입력) ──
+export const directorSchedule = sqliteTable("director_schedule", {
+  id: text("id").primaryKey(),
+  date: text("date").notNull(),               // "YYYY-MM-DD"
+  time: text("time"),                        // "HH:MM" (선택)
+  title: text("title").notNull(),
+  note: text("note"),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  dsDateIdx: index("director_schedule_date_idx").on(t.date),
+}));
+export type DirectorSchedule = typeof directorSchedule.$inferSelect;
+export type NewDirectorSchedule = typeof directorSchedule.$inferInsert;
+
 export type WorkTask = typeof workTasks.$inferSelect;
 export type NewWorkTask = typeof workTasks.$inferInsert;

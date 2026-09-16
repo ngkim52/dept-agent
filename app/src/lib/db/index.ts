@@ -76,7 +76,18 @@ try {
     updated_at integer NOT NULL
   );
   CREATE INDEX IF NOT EXISTS wq_persona_idx ON work_tasks (persona_key);
-  CREATE INDEX IF NOT EXISTS wq_status_idx ON work_tasks (status);`);
+  ;
+  CREATE TABLE IF NOT EXISTS director_schedule (
+    id text PRIMARY KEY NOT NULL,
+    date text NOT NULL,
+    time text,
+    title text NOT NULL,
+    note text,
+    created_by text,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS director_schedule_date_idx ON director_schedule (date);`);
 } catch { /* 무시 */ }
 
 function syncMigrationJournal() {
