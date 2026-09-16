@@ -62,12 +62,13 @@ function Lvl({ tone = "n", size = 26, icon, iconSize = 13 }: { tone?: string; si
     </span>
   );
 }
-function SectionTitle({ title, note }: { title: string; note?: string }) {
+function SectionTitle({ title, note, action }: { title: string; note?: string; action?: React.ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "30px 0 14px" }}>
       <span style={{ width: 3, height: 16, borderRadius: 3, background: "var(--accent,#1F6C9F)" }} />
       <h2 style={{ fontFamily: "var(--serif,serif)", fontSize: 18, fontWeight: 600, color: "var(--ink,#1C1917)", margin: 0 }}>{title}</h2>
       {note && <span style={{ fontSize: 11.5, color: "#A8A29E", fontFamily: "var(--mono,monospace)", letterSpacing: ".02em" }}>{note}</span>}
+      {action}
     </div>
   );
 }
@@ -403,149 +404,60 @@ function DeadlineCard({ tasks }: { tasks: any[] }) {
   );
 }
 function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd: (v: { date: string; time: string; title: string; note: string }) => void; onDelete: (id: string) => void }) {
-  const [f, setF] = useState({ date: "", time: "", title: "", note: "" });
-  const today = new Date().toISOString().slice(0, 10);
-  const sorted = [...items].sort((a, b) => (a.date + (a.time ?? "")).localeCompare(b.date + (b.time ?? "")));
-  const wd = ["일", "월", "화", "수", "목", "금", "토"];
+  const [pop, setPop] = useState<{ date: string; time: string; title: string; note: string } | null>(null);
+  const today = new Date();
+  const monday = new Date(today);
+  const dow = (today.getDay() + 6) % 7;           // 월=0
+  monday.setDate(today.getDate() - dow);
+  const fc = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const wd = ["월", "화", "수", "목", "금", "토", "일"];
+  const days = Array.from({ length: 7 }, (_, k) => { const d = new Date(monday); d.setDate(monday.getDate() + k); return { wd: wd[k], date: fc(d), dateTxt: `${d.getMonth() + 1}/${d.getDate()}`, isToday: fc(d) === fc(today) }; });
+  const hours = Array.from({ length: 10 }, (_, k) => k + 9);   // 9시~18시
+  const byKey = (date: string, h: number) => (items || []).filter(x => String(x.date) === date && (x.time ? Number(x.time.slice(0, 2)) : 9) === h);
+  const save = () => { if (!pop) return; onAdd(pop); setPop(null); };
   return (
-    <div className="cd">
-      <div className="cd-head"><Lvl tone="a" size={26} icon="cal" iconSize={13} /><h3>부서장 일정</h3><span style={{ fontSize: 10, color: "var(--ink-faint)", fontFamily: "var(--mono,monospace)" }}>수동 입력</span></div>
-      <div style={{ display: "grid", gap: 7, marginBottom: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 7 }}>
-          <input value={f.date} onChange={e => setF({ ...f, date: e.target.value })} placeholder="날짜 (YYYY-MM-DD)" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
-          <input value={f.time} onChange={e => setF({ ...f, time: e.target.value })} placeholder="시간 (예 14:00)" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
-        </div>
-        <input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="일정 제목" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
-        <input value={f.note} onChange={e => setF({ ...f, note: e.target.value })} placeholder="메모 (선택)" style={{ padding: "7px 9px", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
-        <button onClick={() => { if (!f.date || !f.title.trim()) return; onAdd(f); setF({ date: "", time: "", title: "", note: "" }); }} style={{ padding: "7px 0", fontSize: 12, fontWeight: 600, color: "#fff", background: "#8A6116", border: "none", borderRadius: 8, cursor: "pointer" }}>일정 등록</button>
-      </div>
-      <div className="ddlist">
-        {sorted.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "10px 0" }}>등록된 부서장 일정이 없습니다.</div>}
-        {sorted.map(it => {
-          const [y, m, dd] = String(it.date).split("-");
-          const w = wd[new Date(Number(y), Number(m) - 1, Number(dd)).getDay()];
-          return (
-            <div key={it.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "6px 0", borderBottom: "1px solid var(--line,#F3F1EC)" }}>
-              <div style={{ width: 52, textAlign: "center", borderRadius: 8, background: it.date === today ? "#F6EFDF" : "#F5F4F0", padding: "4px 2px" }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{dd}</div><div style={{ fontSize: 9.5, color: "var(--ink-faint)" }}>{it.date === today ? "오늘" : w + "요일"}</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{it.title}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{it.time ? it.time : ""}{it.note ? " · " + it.note : ""}</div>
-              </div>
-              <button onClick={() => onDelete(it.id)} title="삭제" style={{ fontSize: 10, border: "1px solid #E3E0DB", background: "#fff", borderRadius: 6, padding: "1px 6px", color: "#9F2F2D", cursor: "pointer" }}>삭제</button>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function WorkQueueCard({ tasks, stats, reload, onDelete }: { tasks: any[]; stats: any; reload: () => void; onDelete?: (id: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", assignee: "", dueDate: "", content: "" });
-  const st = stats ?? { total: 0, done: 0, delayed: 0, avgProgress: 0 };
-  const create = async () => {
-    if (!form.title.trim()) return;
-    await fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.title, assignee: form.assignee, dueDate: form.dueDate, content: form.content }) });
-    setForm({ title: "", assignee: "", dueDate: "", content: "" }); setOpen(false); reload();
-  };
-  const patch = async (id: string, p: any) => { await fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }); reload(); };
-  return (
-    <div className="cd">
-      <div className="cd-head"><Lvl tone="b" size={26} icon="bolt" iconSize={13} /><h3>부서 워크큐</h3><button onClick={() => setOpen(!open)} className="wq-add" style={{ border: "1px solid var(--line,#E8E4DD)", background: "var(--surface,#fff)", borderRadius: 8, padding: "4px 10px", fontSize: 11.5, cursor: "pointer" }}>{open ? "닫기" : "+ 일감 생성"}</button></div>
-      <div style={{ display: "flex", gap: 10, margin: "2px 0 10px", flexWrap: "wrap" }}>
-        <span className="wq-stat" style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>전체 {st.total} · 진행 중 {st.doing ?? 0} · 완료 {st.done} · 지연 {st.delayed}</span>
-        <span style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>평균 진행률 <b>{st.avgProgress}%</b></span>
-      </div>
-      {open && (
-        <div style={{ display: "grid", gap: 6, marginBottom: 10, padding: 10, border: "1px dashed var(--line,#E0DBD3)", borderRadius: 10, background: "#FBFAF7" }}>
-          <input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="일감 제목" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            <input value={form.assignee} onChange={e => setForm({ ...form, assignee: e.target.value })} placeholder="담당자" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
-            <input value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} placeholder="마감(예 2026-09-30)" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
+    <div className="cd" style={{ minWidth: 0 }}>
+      <div className="cd-head"><Lvl tone="a" size={26} icon="cal" iconSize={13} /><h3>부서장 일정 <span style={{ fontSize: 10, color: "var(--ink-faint)", fontFamily: "var(--mono,monospace)" }}>주간</span></h3></div>
+      <div style={{ display: "grid", gridTemplateColumns: "34px repeat(7, 1fr)", gap: 3 }}>
+        <div />
+        {days.map(d => (
+          <div key={d.date} style={{ textAlign: "center", fontSize: 10, fontWeight: d.isToday ? 800 : 600, color: d.wd === "일" || d.wd === "토" ? "#9F2F2D" : "var(--ink)", background: d.isToday ? "#F6EFDF" : "transparent", borderRadius: 6, padding: "3px 0" }}>
+            <div>{d.wd}</div><div style={{ fontSize: 9, color: "var(--ink-faint)" }}>{d.dateTxt}</div>
           </div>
-          <input value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} placeholder="진행 내용(주간/월간 업무 등) — RAG 등록" style={{ padding: "6px 8px", fontSize: 12.5, border: "1px solid var(--line)", borderRadius: 7 }} />
-          <button onClick={create} disabled={!form.title.trim()} style={{ padding: "7px", fontSize: 12.5, borderRadius: 8, background: "#1F6C9F", color: "#fff", border: "none", cursor: "pointer" }}>일감 등록</button>
+        ))}
+        {hours.map(h => (
+          <div key={h} style={{ display: "contents" }}>
+            <div style={{ fontSize: 9, color: "var(--ink-faint)", display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 6 }}>{h}</div>
+            {days.map(d => {
+              const its = byKey(d.date, h);
+              return (
+                <div key={d.date + h} onClick={() => setPop({ date: d.date, time: `${String(h).padStart(2, "0")}:00`, title: "", note: "" })} title="클릭하여 일정 등록"
+                  style={{ minHeight: 26, border: "1px solid var(--line,#EFECE6)", borderRadius: 6, padding: 2, cursor: "pointer", background: its.length ? "#F6EFDF" : "#FDFCFA" }}>
+                  {its.map(it => (
+                    <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 8.5, lineHeight: 1.2, color: "#8A6116" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{it.time ? it.time.slice(0, 5) + " " : ""}{it.title}</span>
+                      <button onClick={e => { e.stopPropagation(); onDelete(it.id); }} style={{ border: "none", background: "transparent", color: "#9F2F2D", cursor: "pointer", padding: 0, fontSize: 9 }}>×</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      {pop && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setPop(null)}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, width: "min(360px, 92vw)", boxShadow: "0 18px 50px rgba(0,0,0,.18)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>일정 등록 · {pop.date} {pop.time}</div>
+            <input value={pop.title} onChange={e => setPop({ ...pop, title: e.target.value })} placeholder="일정 제목" autoFocus style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, marginBottom: 7 }} />
+            <input value={pop.note} onChange={e => setPop({ ...pop, note: e.target.value })} placeholder="메모 (선택)" style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, marginBottom: 10 }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setPop(null)} style={{ flex: 1, padding: "9px 0", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, background: "#fff", cursor: "pointer" }}>취소</button>
+              <button onClick={save} style={{ flex: 1, padding: "9px 0", fontSize: 12.5, fontWeight: 600, color: "#fff", background: "#8A6116", border: "none", borderRadius: 8, cursor: "pointer" }}>등록</button>
+            </div>
+          </div>
         </div>
       )}
-      <div className="wqlist" style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {tasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "6px 0" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 「+ 일감 생성」으로 등록하세요.</div>}
-        {tasks.map((t) => (
-          <div key={t.id} style={{ border: "1px solid var(--line,#EDEAE5)", borderRadius: 10, padding: "8px 10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <Tag tone={t.status === "done" ? "g" : t.status === "delayed" ? "r" : t.status === "doing" ? "b" : "n"}>{t.status === "doing" ? "진행" : t.status === "done" ? "완료" : t.status === "delayed" ? "지연" : "대기"}</Tag>
-              <b style={{ fontSize: 12.5, flex: 1 }}>{t.title}</b>
-              <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>{t.assignee || ""}{t.dueDate ? " · " + t.dueDate : ""}</span>
-              {onDelete && <button onClick={() => onDelete(t.id)} title="일감 삭제" style={{ fontSize: 10, border: "1px solid #E3E0DB", background: "#fff", borderRadius: 6, padding: "1px 6px", color: "#9F2F2D", cursor: "pointer" }}>삭제</button>}
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
-              <div style={{ flex: 1, height: 6, borderRadius: 4, background: "#EFECE6" }}><div style={{ width: `${t.progress ?? 0}%`, height: 6, borderRadius: 4, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
-              <span style={{ fontSize: 11 }}>{t.progress ?? 0}%</span>
-              {t.status !== "done" && <button onClick={() => patch(t.id, { progress: (t.progress ?? 0) >= 90 ? 0 : (t.progress ?? 0) + 25 })} style={{ fontSize: 10.5, border: "1px solid var(--line)", background: "#fff", borderRadius: 6, padding: "2px 6px", cursor: "pointer" }}>+25%</button>}
-              {t.status === "delayed" && <span style={{ fontSize: 10.5, color: "#C05A6E" }}>서면 보고 지시</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function QueueCard({ dash }: { dash: ClaimDashboard }) {
-  return (
-    <div className="cd">
-      <div className="cd-head">
-        <Lvl tone="a" icon="clock" /><h3>심사 처리 큐 · 지연 관리</h3>
-        <QBtn label="큐 상세" q="심사 처리 큐 지연 구간의 기한 초과분을 없애는 실행 계획을 제안해 주세요." icon="chev" />
-      </div>
-      <table className="qtable">
-        <thead><tr><th>구분</th><th>건수</th><th style={{ width: "38%" }}>분포</th><th>상태</th></tr></thead>
-        <tbody>
-          {dash.queueRows.map(r => (
-            <tr key={r.label}>
-              <td>{r.label}</td><td className="cnt">{r.cnt}</td>
-              <td><div className="bar"><i style={{ width: `${r.pct}%` }} />{typeof r.overPct === "number" && <i className="over" style={{ width: `${r.overPct}%`, left: `${r.pct}%` }} />}</div></td>
-              <td><Tag tone={r.tone}>{r.status}</Tag></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="planline"><span dangerouslySetInnerHTML={{ __html: dash.queueSummary }} /><QBtn label="정리안 요청" q="기한 초과 156건을 이번 주 안에 정리하는 실행 계획을 세워 주세요." /></div>
-      <div className="cd-head" style={{ margin: "16px 0 6px" }}><h3 style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>다가오는 마감</h3></div>
-      <div className="ddlist">
-        {dash.deadlines.map((d) => (
-          <div className="dd" key={d.title}>
-            <div className="dday"><b>{d.day}</b><span>{d.weekday}</span></div>
-            <div className="dt"><h4>{d.title}</h4><p>{d.sub}</p></div>
-            <div className="dstate"><Tag tone={d.tone}>{d.state}</Tag></div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MonitorCard({ m }: { m: Monitor }) {
-  return (
-    <div className="cd">
-      <div className="cd-head"><Lvl tone={m.tone} icon={m.icon} /><h3>{m.title}</h3>
-        <QBtn label="질문" q={`${m.title} 현재 ${m.big}${m.bigUnit} — 실행 계획을 검토해 주세요.`} icon="chev" />
-      </div>
-      <div className="metriccell">
-        <div className="metricrow">
-          <div className="gauge">
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--ink-soft)", marginBottom: 5 }}><span>{m.gaugeLabel}</span><span>{m.gaugeRight}</span></div>
-            <div className="kbar"><i style={{ width: `${m.gaugePct}%`, background: m.gaugeColor ?? undefined }} /></div>
-          </div>
-          <div className="gv"><span className="big-num">{m.big}<small>{m.bigUnit}</small></span></div>
-        </div>
-        <div className="planline"><span dangerouslySetInnerHTML={{ __html: m.planLine }} /><Tag tone={m.planTag.tone}>{m.planTag.text}</Tag></div>
-      </div>
-      <div className="mlist">
-        {m.items.map((it, i) => <div className="mitem" key={i}><span className="mb" style={{ background: it.dot }} /><div dangerouslySetInnerHTML={{ __html: it.text }} /></div>)}
-      </div>
     </div>
   );
 }
@@ -575,21 +487,15 @@ function MonRow({ t, onDelete }: { t: any; onDelete?: (id: string) => void }) {
 }
 
 
-function NewsCard({ fss, ins }: { fss: NewsItem[]; ins: NewsItem[] }) {
+function NewsCard({ title, items }: { title: string; items: NewsItem[] }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"fss" | "ins">("fss");
-  const list = tab === "fss" ? fss : ins;
   return (
     <div className="cd" style={{ display: "flex", flexDirection: "column" }}>
       <div className="cd-head">
-        <Lvl tone="n" icon="news" /><h3>금감원 공시 · 오늘의 보험뉴스</h3>
-        <div className="news-tabs">
-          <button className={tab === "fss" ? "on" : ""} onClick={() => setTab("fss")}>금감원 공시</button>
-          <button className={tab === "ins" ? "on" : ""} onClick={() => setTab("ins")}>보험 뉴스</button>
-        </div>
+        <Lvl tone="n" icon="news" /><h3>{title}</h3>
       </div>
       <div className="nlist">
-        {list.map((n, i) => (
+        {items.map((n, i) => (
           <div className="nitem" key={i}>
             <span className="ndate">{n.date}</span>
             <div className="nc"><h4>{n.title}</h4><p>{n.sub}</p></div>
@@ -597,44 +503,6 @@ function NewsCard({ fss, ins }: { fss: NewsItem[]; ins: NewsItem[] }) {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function ChatPanel({ dash }: { dash: ClaimDashboard | null }) {
-  const router = useRouter();
-  const [q, setQ] = useState("");
-  const send = () => { if (q.trim()) router.push(`/chat?q=${encodeURIComponent(q.trim())}`); };
-  return (
-    <div className="chatpanel">
-      <div className="cp-head">
-        <div className="pchip"><span className="ava">심</span><div><b>보험금심사기획 부서장</b><span>대시보드 데이터를 근거로 검증·조언합니다</span></div></div>
-        <span className="ctx-toggle" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: "auto", fontSize: 10.5, color: "#1F6C9F", background: "#E8F1F9", borderRadius: 8, padding: "5px 9px" }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1F6C9F" }} />대시보드 컨텍스트
-        </span>
-        <button className="kq" onClick={() => router.push("/chat?q=" + encodeURIComponent("대시보드 화면 전체를 설명해 주세요."))} title="질문하기"><Ic name="q" size={13} /></button>
-      </div>
-      <div className="ctxbar"><b>대시보드 참조:</b>
-        <Tag tone="b">{`${curMonth(dash)} 실적 · 2026`}</Tag><Tag tone="n">누적 지급 {dash?.trend?.cumulative.toLocaleString("ko-KR") ?? "4,218"}억</Tag><Tag tone="r">{`손해율 ${dash?.trend?.lossRatio?.[8] ?? 82.4}%`}</Tag><Tag tone="b">AI 적용 71.3%</Tag><Tag tone="a">초과 156건</Tag>
-        <span style={{ marginLeft: "auto", color: "#1F6C9F" }}>매일 09:00 갱신</span>
-      </div>
-      <div className="cp-msgs">
-        <div className="msg user"><span className="who">팀원 · 09:12</span><div className="bubble">{curMonth(dash)} 손해율 83.1% — 목표 79%보다 4.1%p 높아. 지금 상황을 한 줄로 요약해 줘.</div></div>
-        <div className="msg assistant"><span className="who">부서장 · 09:12</span>
-          <div className="bubble">{curMonth(dash)} 누적 손해율 <b>83.1%</b>(목표 79.0% 대비 <b>+4.1%p</b>, 3개월 연속 상승)로 <b>통제 필요 구간</b>입니다. 원인은 ①실손·상해 청구 급증(+6.2%) ②1건당 평균 지급액 +4.1% ③조서 누락 등 품질 지적 156건이 복합된 것으로 보입니다.</div>
-          <div className="refs"><span className="ref">대시보드 · 손해율 추이</span><span className="ref">{curMonth(dash)} 품질 점검</span></div>
-        </div>
-      </div>
-      <div className="sug-row">
-        {["손해율 +3.4%p 원인 분석", "AI 한도 500만 확대 리스크", "기한 초과 156건 정리", "오늘 공시·뉴스 영향 요약"].map(s => (
-          <button className="sug" key={s} onClick={() => router.push(`/chat?q=${encodeURIComponent(s)}`)}>{s}</button>
-        ))}
-      </div>
-      <div className="cp-in">
-        <textarea rows={1} value={q} onChange={e => setQ(e.target.value)} placeholder="대시보드 지표에 대해 질문하세요 — 예) 손해율 원인을 분석해 줘" onKeyDown={e => { if (e.key === "Enter" && !e.nativeEvent.isComposing) send(); }} />
-        <button className="sendbtn" onClick={send} title="전송"><Ic name="send" size={15} /></button>
-      </div>
-      <div style={{ padding: "7px 14px", borderTop: "1px solid var(--line)", fontSize: 10, color: "var(--ink-faint)" }}>전체 채팅은 좌측 레일 [채팅]에서 — 질문을 입력하면 에이전트와 대화합니다.</div>
     </div>
   );
 }
@@ -841,7 +709,8 @@ export default function Dashboard() {
             <DirectorNote review={reviewsBy(data, "pipeline")} onMeeting={(r) => setMeeting(r)} onTask={openTaskForm} registered={(tt) => workTasks.some((w) => w.title === tt)} />
 
 
-            <SectionTitle title="업무 진도 · 모니터링" note={`부서 워크큐 일감 ${workTasks.length}건 · 일감별 부서장 의견은 LLM 자동 생성`} />
+            <SectionTitle title="업무 진도 · 모니터링" note={`일감별 부서장 의견은 LLM 자동 생성`}
+              action={<button onClick={() => openTaskForm("")} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#1F6C9F", border: "none", borderRadius: 9, cursor: "pointer" }}><Ic name="bolt" size={12} />일감 등록</button>} />
             <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
               {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 부서 워크큐에서 일감을 생성하세요.</div>}
               {workTasks.map(t => {
@@ -861,14 +730,13 @@ export default function Dashboard() {
             </div>
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
-              <DirectorScheduleCard items={schedule} onAdd={addSchedule} onDelete={delSchedule} />
               <DeadlineCard tasks={workTasks} />
+              <DirectorScheduleCard items={schedule} onAdd={addSchedule} onDelete={delSchedule} />
             </div>
-            <WorkQueueCard tasks={workTasks} stats={workStats} reload={loadWork} onDelete={delTask} />
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
-              <NewsCard fss={dash.fssNews} ins={dash.insNews} />
-              <ChatPanel dash={dash} />
+              <NewsCard title="금감원 공시" items={dash.fssNews ?? []} />
+              <NewsCard title="보험 뉴스" items={dash.insNews ?? []} />
             </div>
 
                       </>
