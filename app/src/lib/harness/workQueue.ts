@@ -45,7 +45,7 @@ export async function createWorkTask(input: Partial<NewWorkTask>, createdBy?: st
     title: input.title ?? "제목 없음",
     assignee: input.assignee ?? null,
     category: input.category ?? "일반",
-    dueDate: input.dueDate ?? null,
+    dueDate: normalizeDate(input.dueDate),
     status: input.status ?? "todo",
     progress: input.progress ?? 0,
     source: input.source ?? "direct",
@@ -69,6 +69,7 @@ export async function getWorkTask(id: string): Promise<WorkTask | null> {
 export async function updateWorkTask(id: string, patch: Partial<NewWorkTask>): Promise<WorkTask | null> {
   const cur = await getWorkTask(id);
   if (!cur) return null;
+  if ("dueDate" in patch) patch = { ...patch, dueDate: normalizeDate(patch.dueDate) };
   await db.update(schema.workTasks)
     .set({ ...patch, updatedAt: now() })
     .where(eq(schema.workTasks.id, id));
@@ -105,4 +106,5 @@ export async function taskStats(personaKey?: string): Promise<{ total: number; d
   return { total, done, doing, todo, delayed, avgProgress };
 }
 
-export { dueWithinDays } from "@/lib/dashboard/deadlines";
+import { normalizeDate } from "@/lib/dashboard/deadlines";
+export { dueWithinDays, normalizeDate } from "@/lib/dashboard/deadlines";

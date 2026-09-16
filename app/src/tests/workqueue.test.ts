@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb, withDept } from "./helpers";
-import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, deleteWorkTask, dueWithinDays } from "@/lib/harness/workQueue";
+import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, deleteWorkTask, dueWithinDays, normalizeDate } from "@/lib/harness/workQueue";
 
 beforeEach(async () => { await resetDb(); await withDept(); });
 
@@ -79,5 +79,15 @@ describe("부서 워크큐 (018-B)", () => {
     expect(titles).toEqual(["지연", "오늘", "3일 후"]);
     expect(view.find(v => v.task.title === "지연")!.overdue).toBe(true);
     expect(view.find(v => v.task.title === "3일 후")!.daysLeft).toBe(3);
+  });
+  it("다가오는 마감: YYYYMMDD(구분자 없는) 마감일도 1주일 이내로 인식", () => {
+    const now = new Date(2026, 8, 16); // 2026-09-16
+    const mk = (p: any) => ({ id: p.title, title: p.title, dueDate: p.dueDate ?? null, status: p.status ?? "todo", progress: 0, assignee: p.assignee ?? null, category: p.category ?? null } as any);
+    const task = mk({ title: "수동심사 개선", dueDate: "20260918" });   // 2026-09-18 = D-2
+    const view = dueWithinDays([task], 7, now);
+    expect(view.length).toBe(1);
+    expect(view[0].task.title).toBe("수동심사 개선");
+    expect(view[0].daysLeft).toBe(2);
+    expect(normalizeDate("20260918")).toBe("2026-09-18");
   });
 });

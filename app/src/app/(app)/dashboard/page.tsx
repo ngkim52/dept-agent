@@ -1,5 +1,5 @@
 "use client";
-import { dueWithinDays } from "@/lib/dashboard/deadlines";
+import { dueWithinDays, normalizeDate } from "@/lib/dashboard/deadlines";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type {
@@ -381,7 +381,8 @@ function DeadlineCard({ tasks }: { tasks: any[] }) {
       <div className="ddlist">
         {due.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12, padding: "12px 0" }}>1주일 이내(최근 지연 포함) 마감 일감이 없습니다.</div>}
         {due.map(({ task: t, overdue, daysLeft }) => {
-          const [y, m, dd] = t.dueDate!.split("-");
+          const nd = normalizeDate(t.dueDate) ?? "";
+          const [y, m, dd] = nd.split("-");
           const w = wd[new Date(Number(y), Number(m) - 1, Number(dd)).getDay()];
           return (
             <div key={t.id} className="dd" style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "7px 0", borderBottom: "1px solid var(--line,#F3F1EC)" }}>
