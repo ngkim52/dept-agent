@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireUser, jsonError } from "@/lib/auth/http";
-import { getWorkTask, updateWorkTask, deleteWorkTask } from "@/lib/harness/workQueue";
+import { getWorkTask, updateWorkTask, deleteWorkTask, completeWorkTask } from "@/lib/harness/workQueue";
 
 // GET /api/workqueue/[id] — 단건 조회
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -17,6 +17,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const user = await requireUser(req);
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
+    if (body.complete) {
+      const task = await completeWorkTask(id, { changedBy: user.id, content: typeof body.content === "string" ? body.content : undefined });
+      return Response.json({ task });
+    }
     const patch: any = {};
     if (body.status) patch.status = body.status;
     if (typeof body.progress === "number") patch.progress = body.progress;

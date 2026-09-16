@@ -462,18 +462,27 @@ function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd:
   );
 }
 
-function MonRow({ t, onDelete }: { t: any; onDelete?: (id: string) => void }) {
+function MonRow({ t, onDelete, onProgress, onComplete }: { t: any; onDelete?: (id: string) => void; onProgress?: (pct: number) => void; onComplete?: () => void }) {
+  const isDone = t.status === "done";
+  const clickBar = (e: any) => {
+    if (!onProgress) return;
+    const el = e.currentTarget as HTMLElement;
+    const r = el.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(100, Math.round(((e.clientX - r.left) / r.width) * 100 / 5) * 5));
+    onProgress(pct);
+  };
   return (
     <div className="cd">
-      <div className="cd-head"><Lvl tone={t.status === "delayed" ? "r" : t.status === "done" ? "g" : t.status === "doing" ? "b" : "n"} size={26} icon="bolt" iconSize={13} /><h3 style={{ flex: 1 }}>{t.title}</h3>
+      <div className="cd-head"><Lvl tone={t.status === "delayed" ? "r" : isDone ? "g" : t.status === "doing" ? "b" : "n"} size={26} icon="bolt" iconSize={13} /><h3 style={{ flex: 1 }}>{t.title}</h3>
         {onDelete && <button onClick={() => onDelete(t.id)} title="일감 삭제" style={{ border: "1px solid #E3E0DB", background: "#fff", borderRadius: 7, padding: "2px 8px", fontSize: 10.5, color: "#9F2F2D", cursor: "pointer" }}>삭제</button>}
-        <QBtn label="질문" q={`일감「${t.title}」의 실행·진행 상황을 점검해 주세요.`} icon="chev" />
+        {!isDone && onComplete && <button onClick={onComplete} title="완료 처리 → RAG 업무 히스토리 저장" style={{ border: "1px solid #B7CBB2", background: "#EDF3EC", borderRadius: 7, padding: "2px 8px", fontSize: 10.5, fontWeight: 600, color: "#346538", cursor: "pointer" }}>완료</button>}
       </div>
       <div className="metriccell">
         <div className="metricrow">
           <div className="gauge">
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--ink-soft)", marginBottom: 5 }}><span>{t.assignee || "담당 미지정"}{t.dueDate ? " · " + t.dueDate : ""}</span><span>{t.status === "doing" ? "진행" : t.status === "done" ? "완료" : t.status === "delayed" ? "지연" : "대기"}</span></div>
-            <div className="kbar"><i style={{ width: `${Math.min(t.progress ?? 0, 100)}%`, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--ink-soft)", marginBottom: 5 }}><span>{t.assignee || "담당 미지정"}{t.dueDate ? " · " + t.dueDate : ""}</span><span>{t.status === "doing" ? "진행" : isDone ? "완료" : t.status === "delayed" ? "지연" : "대기"}</span></div>
+            <div className="kbar" onClick={clickBar} title={onProgress ? "클릭하여 진행률 조정" : undefined} style={{ cursor: onProgress ? "pointer" : "default" }}><i style={{ width: `${Math.min(t.progress ?? 0, 100)}%`, background: t.status === "delayed" ? "#C05A6E" : "#1F6C9F" }} /></div>
+            <div style={{ fontSize: 9, color: "var(--ink-faint)", marginTop: 2 }}>{onProgress ? "막대 클릭 → 진행률 조정" : ""}</div>
           </div>
           <div className="gv"><span className="big-num">{t.progress ?? 0}<small>%</small></span></div>
         </div>
@@ -665,6 +674,8 @@ export default function Dashboard() {
   const openTaskForm = (title: string) => { if (workTasks.some((w) => w.title === title)) return; setTaskDraft({ title, assignee: "", dueDate: "", content: "" }); };
   const submitTask = () => { if (!taskDraft?.title?.trim()) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: taskDraft.title, assignee: taskDraft.assignee, dueDate: taskDraft.dueDate, content: taskDraft.content, source: "director_note" }) }).then(loadWork).then(() => setTaskDraft(null)).catch(() => {}); };
   const delTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "DELETE" }).then(loadWork).catch(() => {});
+  const setProgress = (id: string, pct: number) => fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ progress: pct }) }).then(loadWork).catch(() => {});
+  const completeTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ complete: true }) }).then(loadWork).catch(() => {});
   const delSchedule = (id: string) => fetch(`/api/schedule/${id}`, { method: "DELETE" }).then(loadSchedule).catch(() => {});
   const addSchedule = (v: { date: string; time: string; title: string; note: string }) => fetch("/api/schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) }).then(loadSchedule).catch(() => {});
   const dash = data?.dash;
@@ -712,21 +723,27 @@ export default function Dashboard() {
             <SectionTitle title="업무 진도 · 모니터링" note={`일감별 부서장 의견은 LLM 자동 생성`}
               action={<button onClick={() => openTaskForm("")} style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", fontSize: 12.5, fontWeight: 700, color: "#fff", background: "#1F6C9F", border: "none", borderRadius: 9, cursor: "pointer" }}><Ic name="bolt" size={12} />일감 등록</button>} />
             <div className="dab-row g4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
-              {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 부서장 의견 항목을 클릭하거나 부서 워크큐에서 일감을 생성하세요.</div>}
-              {workTasks.map(t => {
-                const op = opinions[t.title];
-                return (
-                  <div key={t.id}>
-                    <MonRow t={t} onDelete={delTask} />
-                    {op && (
-                      <div style={{ marginTop: 8, borderLeft: "3px solid #B08600", background: "#FBF6EA", borderRadius: 8, padding: "7px 9px", fontSize: 11, lineHeight: 1.5, color: "var(--ink,#1C1917)" }}>
-                        <div style={{ fontWeight: 700, color: "#8A6116", marginBottom: 2 }}>부서장 의견{op.status === "done" ? op.reportTime ? ` · 보고 ${op.reportTime} 추천` : "" : " · LLM 자동"}</div>
-                        {op.opinion}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {workTasks.length === 0 && <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>등록된 일감이 없습니다. 일감 등록 버튼으로 생성하세요.</div>}
+              {workTasks.map(t => (
+                <MonRow key={t.id} t={t} onDelete={delTask} onProgress={(p) => setProgress(t.id, p)} onComplete={() => completeTask(t.id)} />
+              ))}
+            </div>
+            <div className="cd" style={{ marginTop: 16, minWidth: 0 }}>
+              <div className="cd-head"><Lvl tone="a" size={26} icon="doc" iconSize={13} /><h3>부서장 의견 <span style={{ fontSize: 10, color: "var(--ink-faint)" }}>RAG 참고 · 일감별</span></h3></div>
+              {workTasks.filter(t => opinions[t.title]).length === 0
+                ? <div style={{ color: "var(--ink-faint)", fontSize: 12.5, padding: "14px 2px" }}>의견이 로딩 중이거나 없습니다.</div>
+                : <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {workTasks.filter(t => opinions[t.title]).map(t => {
+                      const op = opinions[t.title];
+                      return (
+                        <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 12, borderLeft: "3px solid #B08600", background: "#FBF6EA", borderRadius: 8, padding: "9px 12px", fontSize: 12, lineHeight: 1.55, color: "var(--ink,#1C1917)" }}>
+                          <div style={{ flexShrink: 0, minWidth: 130, maxWidth: 180, fontWeight: 700, color: "#8A6116", fontSize: 11.5 }}>{t.title}</div>
+                          <div style={{ flex: 1 }}>{op.opinion}</div>
+                          {op.status === "done" && op.reportTime && <span style={{ flexShrink: 0, background: "#EDF3EC", color: "#346538", borderRadius: 8, padding: "4px 8px", fontSize: 10.5, fontWeight: 600, whiteSpace: "nowrap" }}>보고 {op.reportTime} 추천</span>}
+                        </div>
+                      );
+                    })}
+                  </div>}
             </div>
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>

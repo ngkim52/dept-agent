@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb, withDept } from "./helpers";
-import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, deleteWorkTask, dueWithinDays, normalizeDate } from "@/lib/harness/workQueue";
+import { createWorkTask, listWorkTasks, updateWorkTask, taskStats, reportNotice, getWorkTask, deleteWorkTask, completeWorkTask, dueWithinDays, normalizeDate } from "@/lib/harness/workQueue";
+import { listMemories } from "@/lib/harness/store";
 
 beforeEach(async () => { await resetDb(); await withDept(); });
 
@@ -89,5 +90,17 @@ describe("부서 워크큐 (018-B)", () => {
     expect(view[0].task.title).toBe("수동심사 개선");
     expect(view[0].daysLeft).toBe(2);
     expect(normalizeDate("20260918")).toBe("2026-09-18");
+  });
+
+  it("완료 처리: status=done, progress=100 + RAG 업무 히스토리(지식 메모리) 저장", async () => {
+    const t = await createWorkTask({ personaKey: "claims-planning", title: "9월 손해율 정산", assignee: "이실무", dueDate: "2026-09-22", content: "정산 마감 완료" }, "user-1");
+    const res = await completeWorkTask(t.id, { changedBy: "user-1" });
+    expect(res!.status).toBe("done");
+    expect(res!.progress).toBe(100);
+    const mems = await listMemories("claims-planning");
+    const hist = mems.find(m => (m.tags ?? "").includes("업무히스토리"));
+    expect(hist).toBeTruthy();
+    expect(hist!.content).toContain("9월 손해율 정산");
+    expect(hist!.content).toContain("정산 마감 완료");
   });
 });

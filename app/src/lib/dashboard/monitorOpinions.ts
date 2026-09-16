@@ -62,6 +62,8 @@ export function parseMonitorOpinions(raw: string, tasks: OpinionTask[]): Monitor
 import { listWorkTasks } from "@/lib/harness/workQueue";
 import { listDirectorSchedule } from "@/lib/harness/directorSchedule";
 import { getLlmModel } from "@/lib/agent/llm";
+import { ragflow } from "@/lib/ragflow/client";
+import { getDepartmentDatasets } from "@/lib/dataset/access";
 
 export type GenerateMonitorOptions = { call?: (prompt: string) => Promise<string> };
 
@@ -72,6 +74,8 @@ export function dueGap(date?: string | null): number | undefined {
   return Math.ceil((d.getTime() - now.getTime()) / 86400000);
 }
 
+export const OPINION_NO_RAG_FALLBACK = "RAG에서 해당 업무 관련 자료가 확인되지 않습니다. 담당자는 부서장에게 결과 보고를 진행하세요.";
+
 export async function generateMonitorOpinions(opts: GenerateMonitorOptions = {}): Promise<MonitorOpinion[]> {
   const tasks = await listWorkTasks();
   const schedule = await listDirectorSchedule();
@@ -80,20 +84,50 @@ export async function generateMonitorOpinions(opts: GenerateMonitorOptions = {})
     title: t.title, status: t.status, assignee: t.assignee, dueDate: t.dueDate,
     category: t.category, progress: t.progress, dueLeft: dueGap(t.dueDate), content: t.content,
   }));
-  const prompt = buildMonitorOpinionPrompt(taskViews, schedule.map(s => ({ date: s.date, time: s.time, title: s.title, note: s.note })));
-  let raw: string;
-  if (opts.call) {
-    raw = (await opts.call(prompt)).trim();
-  } else {
-    const { models, model } = await getLlmModel("simple");
-    const res = await models.completeSimple(model, {
-      messages: [{ role: "user" as const, content: prompt, timestamp: Date.now() }],
-    });
-    raw = (res?.content ?? [])
-      .filter((t: any) => t?.type === "text")
-      .map((t: any) => t.text)
-      .join("")
-      .trim();
+
+  // RAG에서 일감별 관련 자료 조회
+  const datasetIds = await getDepartmentDatasets((tasks[0]?.personaKey as string) ?? "claims-planning");
+  const contextByTitle = new Map<string, string>();
+  for (const tv of taskViews) {
+    let context = "";
+    if (datasetIds.length) {
+      try {
+        const chunks = await ragflow.retrieve(`${tv.title}${tv.content ? " " + tv.content : ""}`, datasetIds, 3);
+        context = chunks.map(c => c.content).join("\n");
+      } catch { context = ""; }
+    }
+    contextByTitle.set(tv.title, context);
   }
-  return parseMonitorOpinions(raw, taskViews);
+
+  const opinions: MonitorOpinion[] = [];
+  const llmTasks: OpinionTask[] = [];
+  for (const tv of taskViews) {
+    const ctx = (contextByTitle.get(tv.title) ?? "").trim();
+    if (!ctx) {
+      // RAG 자료 없음 → 단순 결과 보고 지시(LLM 호출 없음)
+      opinions.push({ title: tv.title, opinion: OPINION_NO_RAG_FALLBACK, status: tv.status });
+    } else {
+      llmTasks.push({ ...tv, content: `${tv.content ?? ""}\n\n[RAG 참고자료]\n${ctx}` });
+    }
+  }
+
+  if (llmTasks.length) {
+    const prompt = buildMonitorOpinionPrompt(llmTasks, schedule.map(s => ({ date: s.date, time: s.time, title: s.title, note: s.note })));
+    let raw: string;
+    if (opts.call) {
+      raw = (await opts.call(prompt)).trim();
+    } else {
+      const { models, model } = await getLlmModel("simple");
+      const res = await models.completeSimple(model, {
+        messages: [{ role: "user" as const, content: prompt, timestamp: Date.now() }],
+      });
+      raw = (res?.content ?? [])
+        .filter((t: any) => t?.type === "text")
+        .map((t: any) => t.text)
+        .join("")
+        .trim();
+    }
+    opinions.push(...parseMonitorOpinions(raw, llmTasks));
+  }
+  return opinions;
 }

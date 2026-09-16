@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMonitorOpinionPrompt, parseMonitorOpinions } from "@/lib/dashboard/monitorOpinions";
+import { buildMonitorOpinionPrompt, parseMonitorOpinions, OPINION_NO_RAG_FALLBACK } from "@/lib/dashboard/monitorOpinions";
 
 describe("업무진도 모니터링 일감별 부서장 의견 (018-C)", () => {
   const tasks = [
@@ -26,5 +26,9 @@ describe("업무진도 모니터링 일감별 부서장 의견 (018-C)", () => {
     const done = out.find(o => o.title === "지급 심사분 일괄 정비");
     expect(done!.reportTime).toBe("14:00");
     expect(done!.status).toBe("done");
+  });
+
+  it("RAG 자료 없음 시 결과 보고 지시 기본 문구 사용", () => {
+    expect(OPINION_NO_RAG_FALLBACK).toContain("결과 보고");
   });
 });
