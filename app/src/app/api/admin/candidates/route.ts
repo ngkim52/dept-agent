@@ -60,7 +60,8 @@ export async function GET(req: NextRequest) {
     const resolved = candidates
       .filter((c) => c.status !== "pending")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    const limited = [...pending, ...resolved];
+    // 적용후보는 최대 50건만 노출 (pending 우선, 부족분만 resolved로 채움)
+    const limited = [...pending, ...resolved].slice(0, TOP_PENDING);
     const withRelated = await Promise.all(limited.map(async (c) => ({
       ...c,
       related: await relatedFromStored(c),

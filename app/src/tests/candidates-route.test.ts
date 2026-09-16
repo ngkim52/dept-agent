@@ -101,3 +101,26 @@ describe("GET /api/admin/candidates/[id]?related=1 — 온디맨드 LLM 정밀 �
     expect(d.related[0].id).toBe(mem.id);
   });
 });
+
+
+describe("A2b — 전체 목록도 최대 50건", () => {
+  beforeEach(async () => { process.env.DRYRUN_JUDGE_DISABLED = "1"; await resetDb(); await withDept(); });
+  const mk = (content: string, conf: number) => createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "c", action: "create_memory", proposedContent: content, confidence: conf });
+
+  it("pending 30 + resolved 40 → GET(전체)은 pending을 우선으로 총 50건", async () => {
+    const admin = await withUser({ role: "admin" });
+    for (let i = 0; i < 30; i++) await mk(`pending ${i}`, 0.9);
+    for (let i = 0; i < 40; i++) {
+      const c = await mk(`applied ${i}`, 0.1);
+      await db.update(schema.improvementCandidates).set({ status: "applied" }).where(eq(schema.improvementCandidates.id, c.id));
+    }
+    const headers = await authed(admin);
+    const { GET } = await import("@/app/api/admin/candidates/route");
+    const res = await GET(new NextRequest("http://localhost/api/admin/candidates?personaKey=claims-planning", { headers }));
+    const d = await res.json();
+    expect(res.status).toBe(200);
+    expect(d.candidates.length).toBe(50);
+    const pendingCount = d.candidates.filter((c: any) => c.status === "pending").length;
+    expect(pendingCount).toBe(30); // pending이 전부 우선 포함
+  });
+});
