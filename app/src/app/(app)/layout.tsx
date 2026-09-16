@@ -5,16 +5,10 @@ import { NAV_GROUPS, NAV_ICONS } from "@/lib/nav";
 
 type Me = { user?: { role: string; name: string; email: string } | null };
 
-function Brand({ collapsed }: { collapsed?: boolean }) {
+function Brand() {
   return (
-    <div className="flex items-center gap-3 overflow-hidden">
+    <div className="flex items-center overflow-hidden">
       <img src="/shinhan-life-logo.png" alt="신한라이프" className="h-7 w-auto shrink-0 object-contain" />
-      {!collapsed && (
-        <div className="leading-tight">
-          <p className="font-serif text-sm font-semibold text-ink">부서 에이전트</p>
-          <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-ink-faint">Dept Agent</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -47,7 +41,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const SidebarBody = ({ onNav }: { onNav?: () => void }) => (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-line px-4 py-4">
-        <Brand collapsed={collapsed} />
+        <Brand />
         <button onClick={() => setCollapsed(c => !c)} title={collapsed ? "메뉴 펼치기" : "메뉴 접기"}
           className="hidden h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-canvas hover:text-ink md:flex"
           aria-label="메뉴 토글">
