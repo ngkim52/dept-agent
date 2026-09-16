@@ -531,7 +531,13 @@ function DirectorNote({ review, onMeeting, onTask, registered }: { review: Secti
           <span style={{ fontSize: 9.5, fontWeight: 600, color: "#9F2F2D", background: "#FBEAE9", border: "1px solid #F3D1D0", borderRadius: 999, padding: "2px 8px", marginLeft: "auto" }}>회의 필요</span>
         )}
       </div>
-      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.6, color: "var(--ink,#1C1917)" }}>{review.summary}</p>
+      {review.opinion ? (
+        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, lineHeight: 1.65, color: "var(--ink,#1C1917)", fontStyle: "italic" }}>
+          “{review.opinion}”
+        </p>
+      ) : (
+        <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.6, color: "var(--ink,#1C1917)" }}>{review.summary}</p>
+      )}
       {review.actions && review.actions.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
           {review.actions.map((a, i) => (
@@ -628,7 +634,7 @@ function MeetingModal({ review, onClose }: { review: SectionReview; onClose: () 
 
 /* ─── 메인 페이지 ─── */
 /* ─── 메인 페이지 ─── */
-type SectionReview = { key: string; title: string; summary: string; actions: string[]; teams?: Record<string, string[]>; needsMeeting?: boolean; meetingDraft?: string };
+type SectionReview = { key: string; title: string; summary: string; actions: string[]; opinion?: string; teams?: Record<string, string[]>; needsMeeting?: boolean; meetingDraft?: string };
 type DashData = { user: { name: string; role: string; email: string }; dash: ClaimDashboard; reviews: SectionReview[]; isAdmin: boolean };
 function reviewsBy(data: DashData | null, key: string) {
   return data?.reviews?.find((r) => r.key === key) ?? null;

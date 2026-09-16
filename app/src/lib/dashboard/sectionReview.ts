@@ -13,6 +13,7 @@ import type { ClaimDashboard } from "./dashboardData";
 
 export type SectionReview = {
   key: string; title: string; summary: string; actions: string[];
+  opinion?: string;                 // 부서장이 직접 말하는 의견·지시 (실적+RAG 근거, 부서장 말투)
   teams?: Record<string, string[]>;   // 파트별 할 일: 시스템/기획/품질점검 (할 일 없는 파트 생략)
   needsMeeting?: boolean;             // 회의 필요 여부
   meetingDraft?: string;             // 회의안 초본(MD) — 일정·참석자는 사용자가 작성
@@ -48,7 +49,12 @@ export function buildReviewPrompt(dash: ClaimDashboard, ragContext = ""): string
   const rag = ragContext && ragContext.trim()
     ? `\n[참고 지식(RAG)]\n${ragContext.trim()}\n`
     : "";
-  return `당신은 보험금심사기획팀 부서장입니다. 아래 대시보드 섹션 데이터와 참고 지식(RAG)을 활용해, '실적 기준으로 구체적인 업무 지시'처럼 각 섹션에 대해 "검토사항(summary)"과 "부서원이 해야 할 일(actions)"을 담은 부서장 의견을 작성하세요.
+  return `당신은 보험금심사기획팀 부서장입니다. 아래 대시보드 섹션 데이터와 참고 지식(RAG)을 보고, 진짜 부서장이 부서원에게 직접 말하듯 구체적인 의견과 지시를 내리세요.
+
+각 섹션마다:
+- "opinion": 부서장이 실제로 말하는 어조의 의견·지시(2~3문장). 실적 수치와 RAG 지식을 근거로, '지시·재촉·칭찬·경고'처럼 직접 호소(직원을 '여러분/담당'이라 부르며)하는 말투로 작성. 단순 요약 금지.
+- "summary": 해당 섹션 상황을 1~2문장으로 간결히 요약.
+- "actions": 부서원이 해야 할 구체적인 할 일 3개(각 최대 20자).
 
 [${titles.kpi}]
 ${kpi}
@@ -61,7 +67,7 @@ ${mon}${rag}
 - 특정 섹션에 회의가 필요하다고 판단되면 needsMeeting: true 로 하고, meetingDraft에 회의안 초본을 마크다운으로 작성하세요. 회의안 형식: # 제목 / - 목적: / ## 안건 (각 1~2문장) / ## 결정 필요 사항. 일정·참석자는 사용자가 직접 채우므로 비워두세요.
 
 반드시 아래 JSON만 마크다운 없이 출력하세요:
-{"reviews":[{"key":"kpi","summary":"검토사항 1~2문장","actions":["할일 3개"],"teams":{"시스템":[".."],"기획":[".."],"품질점검":[".."]},"needsMeeting":true,"meetingDraft":"# 회의안\n...\n- 목적:..."},{"key":"pipeline","summary":"...","actions":[".."],"teams":{"..":[".."]}},{"key":"monitor","summary":"...","actions":[".."]}]}
+{"reviews":[{"key":"kpi","opinion":"부서장 말투 의견·지시 2~3문장","summary":"검토사항 1~2문장","actions":["할일 3개"],"teams":{"시스템":[".."],"기획":[".."],"품질점검":[".."]},"needsMeeting":true,"meetingDraft":"# 회의안\n...\n- 목적:..."},{"key":"pipeline","opinion":"부서장 말투 의견·지시","summary":"...","actions":[".."],"teams":{"..":[".."]}},{"key":"monitor","opinion":"부서장 말투 의견·지시","summary":"...","actions":[".."]}]}
 summary는 1~2문장, actions는 3개 항목(각 최대 20자). 필요한 섹션에만 teams/needsMeeting/meetingDraft를 넣고, 불필요하면 생략해도 됩니다.`;
 }
 
@@ -73,11 +79,12 @@ export function parseReviews(text: string): SectionReview[] | null {
     if (!Array.isArray(data.reviews)) return null;
     return data.reviews
       .filter((r: { summary?: unknown }) => r && typeof r.summary === "string")
-      .map((r: { key?: string; summary?: string; actions?: string[]; teams?: Record<string, unknown>; needsMeeting?: boolean; meetingDraft?: string }) => ({
+      .map((r: { key?: string; summary?: string; actions?: string[]; opinion?: string; teams?: Record<string, unknown>; needsMeeting?: boolean; meetingDraft?: string }) => ({
         key: String(r.key ?? ""),
         title: String(r.key ?? ""),
         summary: r.summary as string,
         actions: (Array.isArray(r.actions) ? r.actions : []).map(String) as string[],
+        opinion: typeof r.opinion === "string" && r.opinion.trim() ? r.opinion.trim() : undefined,
         teams: sanitizeTeams(r.teams),
         needsMeeting: !!r.needsMeeting,
         meetingDraft: typeof r.meetingDraft === "string" ? r.meetingDraft : undefined,
