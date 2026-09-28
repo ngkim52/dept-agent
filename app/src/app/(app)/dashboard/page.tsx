@@ -693,8 +693,8 @@ export default function Dashboard() {
   const loadWork = () => fetch("/api/workqueue").then(r => r.json()).then(d => { setWorkTasks(d.tasks ?? []); setWorkStats(d.stats ?? null); }).catch(() => {});
   const loadSchedule = () => fetch("/api/schedule").then(r => r.json()).then(d => setSchedule(d.items ?? [])).catch(() => {});
   const loadOpinions = () => fetch("/api/dashboard/monitor-opinions").then(r => r.json()).then(d => { const m: Record<string, any> = {}; (d.opinions ?? []).forEach((o: any) => { m[o.title] = o; }); setOpinions(m); }).catch(() => {});
-  const openTaskForm = (title: string) => { if (workTasks.some((w) => w.title === title)) return; setTaskDraft({ title, assignee: "", dueDate: "", content: "" }); };
-  const submitTask = () => { if (!taskDraft?.title?.trim()) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: taskDraft.title, assignee: taskDraft.assignee, dueDate: taskDraft.dueDate, content: taskDraft.content, source: "director_note" }) }).then(loadWork).then(() => setTaskDraft(null)).catch(() => {}); };
+  const openTaskForm = (title: string) => { const t = (title ?? "").trim(); if (t && workTasks.some((w) => (w.title ?? "").trim() === t)) return; setTaskDraft({ title: t, assignee: "", dueDate: "", content: "" }); };
+  const submitTask = () => { const title = taskDraft?.title?.trim(); if (!title) return; fetch("/api/workqueue", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, assignee: taskDraft!.assignee, dueDate: taskDraft!.dueDate, content: taskDraft!.content, source: "director_note" }) }).then(loadWork).then(() => setTaskDraft(null)).catch(() => {}); };
   const delTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "DELETE" }).then(loadWork).catch(() => {});
   const setProgress = (id: string, pct: number) => fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ progress: pct }) }).then(loadWork).catch(() => {});
   const completeTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ complete: true }) }).then(loadWork).catch(() => {});
@@ -785,20 +785,35 @@ export default function Dashboard() {
       </style>
       {taskDraft && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.4)", backdropFilter: "blur(2px)", zIndex: 40, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setTaskDraft(null)}>
-          <div style={{ background: "#fff", borderRadius: 14, padding: 18, width: "min(560px, 94vw)", boxShadow: "0 18px 50px rgba(0,0,0,.18)" }} onClick={e => e.stopPropagation()}>
+          <div style={{ background: "#fff", borderRadius: 14, padding: 18, width: "min(560px, 94vw)", maxHeight: "92vh", overflowY: "auto", boxShadow: "0 18px 50px rgba(0,0,0,.18)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <Lvl tone="b" size={22} icon="bolt" iconSize={11} /><h3 style={{ fontSize: 15, margin: 0 }}>일감 등록</h3>
               <button onClick={() => setTaskDraft(null)} style={{ marginLeft: "auto", border: "none", background: "transparent", fontSize: 16, color: "var(--ink-faint)", cursor: "pointer" }}>✕</button>
             </div>
-            <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 10 }}>{taskDraft.title}</div>
-            <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <input value={taskDraft.assignee} onChange={e => setTaskDraft({ ...taskDraft, assignee: e.target.value })} placeholder="담당자" style={{ padding: "7px 9px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
-                <input value={taskDraft.dueDate} onChange={e => setTaskDraft({ ...taskDraft, dueDate: e.target.value })} placeholder="마감일 (예 2026-09-30)" style={{ padding: "7px 9px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+            <div style={{ display: "grid", gap: 10 }}>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 4 }}>제목 <span style={{ color: "#9F2F2D" }}>*</span></label>
+                <input value={taskDraft.title} onChange={e => setTaskDraft({ ...taskDraft, title: e.target.value })} placeholder="일감 제목 (예: 9월 손해율 초과 원인분석)" autoFocus
+                  style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
               </div>
-              <textarea value={taskDraft.content} onChange={e => setTaskDraft({ ...taskDraft, content: e.target.value })} placeholder="진행 내용 (넓게 작성 가능) — DB에 저장되며, 이후 주간/월간 업무에서 조회해 갱신됩니다."
-                style={{ width: "100%", boxSizing: "border-box", minHeight: 160, padding: "9px 11px", fontSize: 13, lineHeight: 1.6, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
-              <button onClick={submitTask} disabled={!taskDraft.title.trim()} style={{ padding: "10px", borderRadius: 9, background: "#1F6C9F", color: "#fff", fontSize: 13.5, fontWeight: 600, border: "none", cursor: "pointer" }}>일감 등록</button>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 4 }}>담당자</label>
+                  <input value={taskDraft.assignee} onChange={e => setTaskDraft({ ...taskDraft, assignee: e.target.value })} placeholder="예: 심사파트장"
+                    style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 4 }}>마감일</label>
+                  <input value={taskDraft.dueDate} onChange={e => setTaskDraft({ ...taskDraft, dueDate: e.target.value })} placeholder="YYYY-MM-DD"
+                    style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8 }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--ink-soft)", marginBottom: 4 }}>내용</label>
+                <textarea value={taskDraft.content} onChange={e => setTaskDraft({ ...taskDraft, content: e.target.value })} placeholder="진행 내용 — DB에 저장되며, 이후 주간/월간 업무에서 조회해 갱신됩니다."
+                  style={{ width: "100%", boxSizing: "border-box", minHeight: 150, padding: "9px 11px", fontSize: 13, lineHeight: 1.6, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+              <button onClick={submitTask} disabled={!taskDraft.title.trim()} style={{ padding: "10px", borderRadius: 9, background: "#1F6C9F", color: "#fff", fontSize: 13.5, fontWeight: 600, border: "none", cursor: taskDraft.title.trim() ? "pointer" : "not-allowed", opacity: taskDraft.title.trim() ? 1 : 0.5 }}>일감 등록</button>
             </div>
           </div>
         </div>
