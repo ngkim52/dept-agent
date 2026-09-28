@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "./index";
 
 const initial: Array<{ id: string; name: string; personaKey: string }> = [
-  { id: "claims-planning", name: "보험금심사기획", personaKey: "claims-planning" },
+  { id: "claims-planning", name: "보험금기획", personaKey: "claims-planning" },
   { id: "actuarial", name: "계리", personaKey: "actuarial" },
 ];
 

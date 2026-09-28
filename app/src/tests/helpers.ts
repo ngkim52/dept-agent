@@ -50,7 +50,7 @@ export async function withUser(opts: {
 export async function withDept() {
   const d = {
     id: "claims-planning",
-    name: "보험금심사기획",
+    name: "보험금기획",
     personaKey: "claims-planning",
     ragflowDatasetId: "ds-test",
     isActive: true,

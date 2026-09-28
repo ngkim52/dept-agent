@@ -697,7 +697,7 @@ export default function Dashboard() {
         <div className="dab-topbar">
           <div className="dab-title">
             <span className="eyebrow">DEPARTMENT · {dash?.asOf ?? "2026. 9. 3 (목)"}</span>
-            <h1>보험금심사기획팀 · 업무 대시보드</h1>
+            <h1>보험금기획팀 · 업무 대시보드</h1>
             <p className="sub">팀 KPI 실적과 처리 흐름, 모니터링, 공시·뉴스를 한 화면에서 확인합니다.</p>
           </div>
           <div className="dab-chip">
@@ -713,7 +713,7 @@ export default function Dashboard() {
           <div style={{ padding: "60px 0", textAlign: "center", color: "var(--ink-faint)" }}>대시보드 로딩 중…</div>
         ) : (
           <>
-            <SectionTitle title="오늘의 집중" note="· 9/3(목) 기준 방향" />
+            <SectionTitle title="오늘의 집중" note={`· ${dash?.asOf ?? ""} 기준 방향`} />
             <FocusSection items={dash.focusItems} />
 
             <SectionTitle title={`핵심 KPI · ${curMonth(dash)} 실적`} note="지급보험금 중심 지표" />

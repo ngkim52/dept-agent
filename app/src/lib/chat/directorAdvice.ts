@@ -10,7 +10,7 @@ export type DirectorAdviceInput = {
 
 export function buildDirectorAdvicePrompt(input: DirectorAdviceInput, schedule: string): string {
   return [
-    "당신은 보험금심사기획 부서장입니다. 직원의 질문에 대한 지식 답변 위에, 진짜 부서장이 부서원에게 직접 하는 짧은 의견·지시(2~4문장)를 한국어로 작성하세요.",
+    "당신은 보험금기획 부서장입니다. 직원의 질문에 대한 지식 답변 위에, 진짜 부서장이 부서원에게 직접 하는 짧은 의견·지시(2~4문장)를 한국어로 작성하세요.",
     "단순 지식 나열은 금지입니다. 질문 내용과 관련 지식, 부서장 일정을 근거로 아래처럼 상황에 맞는 실제 부서장다운 지시를 담으세요.",
     "- 업무 관련자들과 함께 풀어야 할 문제면: 관련 부서원들과 회의를 잡거나, 대시보드 일감으로 등록해 진행하라고.",
     "- 명확하지 않은 업무(이전에 처리해 본 적 없는 신규/불명확 업무)면: 빈 일정 시간에 부서장과 회의를 하자고.",
@@ -44,7 +44,7 @@ export async function generateDirectorAdvice(input: DirectorAdviceInput, opts: {
       const { getLlmModel } = await import("@/lib/agent/llm");
       const { models, model } = await getLlmModel("simple");
       const res = await models.completeSimple(model, {
-        systemPrompt: "당신은 보험금심사 부서장입니다. 부서장의 직접적인 의견·지시를 한국어로 작성합니다.",
+        systemPrompt: "당신은 보험금기획 부서장입니다. 부서장의 직접적인 의견·지시를 한국어로 작성합니다.",
         messages: [{ role: "user" as const, content: prompt, timestamp: Date.now() }],
       });
       raw = (res?.content ?? [])

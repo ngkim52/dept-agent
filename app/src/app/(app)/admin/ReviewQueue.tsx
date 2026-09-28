@@ -18,7 +18,7 @@ const ACTION_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = { pending: "대기", approved: "승인", rejected: "거절", applied: "적용", edited: "수정적용" };
 
 export default function ReviewQueue() {
-  const [personaKey, setPersonaKey] = useState("claims-planning");
+  const [personaKey] = useState("claims-planning");
   const [tab, setTab] = useState<"candidates" | "episodes" | "graph">("candidates");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "applied" | "rejected" | "edited">("all");
   const [cands, setCands] = useState<Candidate[]>([]);
@@ -28,7 +28,7 @@ export default function ReviewQueue() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [graphBusy, setGraphBusy] = useState(false);
-  const [draft, setDraft] = useState<Record<string, { content: string; note: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { content: string; note: string; name?: string; description?: string }>>({});
   const [conflicts, setConflicts] = useState<Record<string, any[]>>({});
   const [applyMode, setApplyMode] = useState<Record<string, { mode: "create" | "modify" | "replace"; target?: string }>>({});
 
@@ -113,12 +113,6 @@ export default function ReviewQueue() {
           </button>
         ))}
         <span className="mx-1 h-4 w-px bg-line" />
-        {["claims-planning", "actuarial"].map((k) => (
-          <button key={k} onClick={() => setPersonaKey(k)} className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${personaKey === k ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-canvas"}`}>
-            {k === "claims-planning" ? "보험금심사기획" : "계리"}
-          </button>
-        ))}
-        <span className="mx-1 h-4 w-px bg-line" />
         {(["all", "pending", "applied", "rejected", "edited"] as const).map((s) => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`rounded-md border px-2.5 py-1 text-[11px] font-medium ${statusFilter === s ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-canvas"}`}>
@@ -141,12 +135,25 @@ export default function ReviewQueue() {
                   <span className="font-mono text-[10px] text-ink-faint">신뢰도 {Math.round(c.confidence * 100)}% · {c.sourceKind}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1.5">{c.requestType && <span className="rounded-full bg-canvas px-1.5 py-0.5 text-[10px] text-ink-faint">{CAND_ID[c.requestType] ?? c.requestType}{c.proposedByRole === "user" ? " (직원)" : c.proposedByRole === "admin" ? " (부장)" : ""}</span>}</div>
-                {c.summary && <p className="mt-2 text-xs text-ink-soft">{c.summary}</p>}
+                {c.targetTitle && <p className="mt-2 text-sm font-semibold text-ink">{c.targetTitle}</p>}
+                {c.summary && <p className="mt-1 text-xs text-ink-soft">{c.summary}</p>}
+                {c.status === "pending" && c.action === "create_skill" && (
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={draft[c.id]?.name ?? c.targetTitle ?? ""}
+                      onChange={e => setDraft(d => ({ ...d, [c.id]: { content: d[c.id]?.content ?? c.proposedContent ?? "", note: d[c.id]?.note ?? "", name: e.target.value, description: d[c.id]?.description ?? c.summary ?? "" } }))}
+                      placeholder="스킬 이름" className="rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs" />
+                    <input
+                      value={draft[c.id]?.description ?? c.summary ?? ""}
+                      onChange={e => setDraft(d => ({ ...d, [c.id]: { content: d[c.id]?.content ?? c.proposedContent ?? "", note: d[c.id]?.note ?? "", name: d[c.id]?.name ?? c.targetTitle ?? "", description: e.target.value } }))}
+                      placeholder="스킬 설명(발동 조건)" className="rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs" />
+                  </div>
+                )}
                 <textarea
                   value={draft[c.id]?.content ?? c.proposedContent ?? ""}
-                  onChange={e => setDraft(d => ({ ...d, [c.id]: { content: e.target.value, note: d[c.id]?.note ?? "" } }))}
+                  onChange={e => setDraft(d => ({ ...d, [c.id]: { content: e.target.value, note: d[c.id]?.note ?? "", name: d[c.id]?.name, description: d[c.id]?.description } }))}
                   className="mt-2 min-h-16 w-full rounded-md border border-line-strong bg-canvas px-3 py-2 font-mono text-xs leading-relaxed text-ink" />
-                <input value={draft[c.id]?.note ?? ""} onChange={e => setDraft(d => ({ ...d, [c.id]: { content: d[c.id]?.content ?? c.proposedContent ?? "", note: e.target.value } }))} placeholder="부서장 의견 (거절 이유 등)" className="mt-2 w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs" />
+                <input value={draft[c.id]?.note ?? ""} onChange={e => setDraft(d => ({ ...d, [c.id]: { content: d[c.id]?.content ?? c.proposedContent ?? "", note: e.target.value, name: d[c.id]?.name, description: d[c.id]?.description } }))} placeholder="부서장 의견 (거절 이유 등)" className="mt-2 w-full rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs" />
                 {c.status === "pending" && (
                   <>
                     {(c.related && c.related.length > 0) && (
@@ -189,7 +196,7 @@ export default function ReviewQueue() {
                       </div>
                     )}
                     <div className="mt-2 flex gap-2">
-                      <button onClick={() => decide(c, "apply", { content: draft[c.id]?.content ?? c.proposedContent })} className="rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white">적용</button>
+                      <button onClick={() => decide(c, "apply", { content: draft[c.id]?.content ?? c.proposedContent, name: draft[c.id]?.name ?? undefined, description: draft[c.id]?.description ?? undefined })} className="rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-white">적용</button>
                       <button onClick={() => decide(c, "reject")} className="rounded-md border border-line-strong bg-surface px-3 py-1.5 text-xs text-ink-soft">거절</button>
                     </div>
                   </>

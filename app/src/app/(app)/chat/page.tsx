@@ -22,7 +22,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 /* ---- 부서(페르소나) 표현 ---- */
 const PERSONAS: Record<string, { name: string; mono: string }> = {
-  "claims-planning": { name: "보험금심사기획 부서장", mono: "심" },
+  "claims-planning": { name: "보험금기획 부서장", mono: "심" },
   actuarial: { name: "계리 부서장", mono: "계" },
 };
 const PERSONA_DEFAULT = { name: "부서장", mono: "부" };

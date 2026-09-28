@@ -318,6 +318,7 @@ export async function generateEpisodeForDepartment(
   departmentId: string,
   departName: string,
   call?: (prompt: string) => Promise<string>,
+  skillCall?: (prompt: string) => Promise<string>,
 ): Promise<GeneratedEpisode> {
   const { extractEpisode, realCompactCall } = await import("@/lib/harness/compact");
   const qas = await recentEpisodeQa(departmentId);
@@ -343,6 +344,15 @@ export async function generateEpisodeForDepartment(
       action: "create_memory", targetTitle: extraction.summary.slice(0, 30) || "검토 지식",
       proposedContent: rule, confidence: 0.85,
     }));
+  }
+  // 재사용 규칙 중 반복 업무 절차·판단 프로세스는 '스킬 후보'(create_skill)로도 등록한다.
+  if (skillCall && rules.length) {
+    const { createSkillCandidatesFromKnowledge } = await import("./knowledgeDraft");
+    await createSkillCandidatesFromKnowledge(personaKey, rules.map((content) => ({ content })), {
+      sourceKind: "episode", sourceId: episode.id, confidence: 0.85, call: skillCall,
+    });
+    const refreshed = await listCandidates({ personaKey });
+    return { episode, candidates: refreshed.filter((c) => c.sourceKind === "episode" && c.sourceId === episode.id) };
   }
   return { episode, candidates };
 }

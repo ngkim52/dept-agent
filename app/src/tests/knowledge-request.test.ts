@@ -32,8 +32,9 @@ describe("지식 축적 경로 A (직원 지식공백 확인 요청)", () => {
     expect(candidate.proposedByRole).toBe("user");
     expect(candidate.sourceConversationId).toBe(convId);
     expect(candidate.status).toBe("pending");
-    expect(candidate.proposedContent).toContain("보험사기 임계값");
-    expect(candidate.proposedContent).toContain("Q: 보험사기 임계값");
+    // 대화 원문(Q:/A:)을 그대로 넣지 않고, 증류(또는 폴백)된 지식 본문을 넣는다.
+    expect(candidate.proposedContent).toMatch(/보험사기 임계값/);
+    expect(candidate.proposedContent).not.toContain("Q: 보험사기 임계값");
   });
   it("부장(admin) 확인함 큐에서 승인 가능 (rejected→approved 적용)", async () => {
     const u = await withUser({ role: "user" });

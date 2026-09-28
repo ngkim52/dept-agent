@@ -23,7 +23,7 @@ const empty: Item = { id: "", personaKey: "claims-planning", active: true, origi
 
 export default function HarnessPanel() {
   const [type, setType] = useState<Kind>("prompt");
-  const [personaKey, setPersonaKey] = useState("claims-planning");
+  const [personaKey] = useState("claims-planning");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -178,19 +178,12 @@ export default function HarnessPanel() {
         </button>
       </div>
 
-      {/* 타입 + 부서 선택 */}
+      {/* 타입 선택 */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {(Object.keys(TYPE_LABEL) as Kind[]).map(k => (
           <button key={k} onClick={() => { setType(k); setEditing(null); }}
             className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${type === k ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-canvas hover:text-ink"}`}>
             {TYPE_LABEL[k]}
-          </button>
-        ))}
-        <span className="mx-1 h-4 w-px bg-line" />
-        {["claims-planning", "actuarial"].map(k => (
-          <button key={k} onClick={() => { setPersonaKey(k); setEditing(null); setDraftVersion(v => v + 1); }}
-            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${personaKey === k ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-canvas hover:text-ink"}`}>
-            {k === "claims-planning" ? "보험금심사기획" : "계리"}
           </button>
         ))}
       </div>

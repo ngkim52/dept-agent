@@ -14,7 +14,7 @@ const VERDICT_STYLE: Record<string, string> = {
 };
 
 export default function DryRunPanel() {
-  const [personaKey, setPersonaKey] = useState("claims-planning");
+  const [personaKey] = useState("claims-planning");
   const [cats, setCats] = useState<Cat[]>([]);
   const [sel, setSel] = useState<Q | null>(null);
   const [running, setRunning] = useState(false);
@@ -39,16 +39,6 @@ export default function DryRunPanel() {
 
   return (
     <div className="mt-5 space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium text-ink-soft">부서:</span>
-        {["claims-planning", "actuarial"].map((k) => (
-          <button key={k} onClick={() => { setPersonaKey(k); setResult(null); }}
-            className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${personaKey === k ? "border-ink bg-ink text-white" : "border-line-strong bg-surface text-ink-soft hover:bg-canvas hover:text-ink"}`}>
-            {k === "claims-planning" ? "보험금심사기획" : "계리"}
-          </button>
-        ))}
-      </div>
-
       {err && <p role="alert" className="rounded-md bg-pale-red px-3 py-2 text-xs text-pale-red-text">{err}</p>}
 
       <div className="grid gap-3 md:grid-cols-2">

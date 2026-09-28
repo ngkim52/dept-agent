@@ -1,4 +1,4 @@
-// 보험금심사기획팀 대시보드 데이터 — 생성기(2026년 1~12월 연간 시계열 기반)
+// 보험금기획팀 대시보드 데이터 — 생성기(2026년 1~12월 연간 시계열 기반)
 import { getKpiDetails, KpiDetail } from "./kpiDetail";
 
 // - 기준일은 항상 "어제(today-1, KST)" — asOf/dataNote 는 오늘 날짜 기준 표기.

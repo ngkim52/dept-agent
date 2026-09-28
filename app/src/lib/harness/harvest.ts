@@ -141,6 +141,8 @@ export async function createCandidatesFromHarvest(
 export interface HarvestForConversationResult {
   accepted: HarvestItem[];
   createdCount: number;
+  /** 반복 절차·판단 프로세스에서 생성된 스킬 후보 수 */
+  skillCreatedCount: number;
 }
 
 /** 대화를 로드해 harvest → 후보 생성까지 한 번에 실행 */
@@ -160,5 +162,8 @@ export async function harvestForConversation(
     .from(schema.messages).where(eq(schema.messages.conversationId, conversationId));
   const result = await harvestConversation(conv.title ?? "제목 없음", rows, call);
   const { createdCount } = await createCandidatesFromHarvest(personaKey, conversationId, result.accepted);
-  return { accepted: result.accepted, createdCount };
+  // 추출된 지식 중 반복 업무 절차·판단 프로세스는 '스킬 후보'(create_skill)로도 등록한다.
+  const { createSkillCandidatesFromKnowledge } = await import("./knowledgeDraft");
+  const skill = await createSkillCandidatesFromKnowledge(personaKey, result.accepted, { sourceKind: "admin_chat", sourceId: conversationId });
+  return { accepted: result.accepted, createdCount, skillCreatedCount: skill.createdCount };
 }

@@ -62,7 +62,7 @@ export async function searchBriefingSources(): Promise<BriefingSource[]> {
 
 function buildPrompt(sources: BriefingSource[]): string {
   const srcList = sources.map((s) => `- ${s.id} [${s.category}] ${s.title} | ${s.url} | ${(s.snippet ?? "").slice(0, 120)}`).join("\n");
-  return `당신은 보험금심사기획팀 부서장입니다. 아래는 최근 보험업계 뉴스 웹검색 결과입니다.
+  return `당신은 보험금기획팀 부서장입니다. 아래는 최근 보험업계 뉴스 웹검색 결과입니다.
 
 ${srcList}
 

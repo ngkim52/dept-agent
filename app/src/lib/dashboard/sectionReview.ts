@@ -49,7 +49,7 @@ export function buildReviewPrompt(dash: ClaimDashboard, ragContext = ""): string
   const rag = ragContext && ragContext.trim()
     ? `\n[참고 지식(RAG)]\n${ragContext.trim()}\n`
     : "";
-  return `당신은 보험금심사기획팀 부서장입니다. 아래 대시보드 섹션 데이터와 참고 지식(RAG)을 보고, 진짜 부서장이 부서원에게 직접 말하듯 구체적인 의견과 지시를 내리세요.
+  return `당신은 보험금기획팀 부서장입니다. 아래 대시보드 섹션 데이터와 참고 지식(RAG)을 보고, 진짜 부서장이 부서원에게 직접 말하듯 구체적인 의견과 지시를 내리세요.
 
 각 섹션마다:
 - "opinion": 부서장이 실제로 말하는 어조의 의견·지시(2~3문장). 실적 수치와 RAG 지식을 근거로, '지시·재촉·칭찬·경고'처럼 직접 호소(직원을 '여러분/담당'이라 부르며)하는 말투로 작성. 단순 요약 금지.

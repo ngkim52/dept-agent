@@ -4,7 +4,7 @@
 
 # dept-agent (보험사 부서별 AI 에이전트)
 
-보험금심사기획팀(claims-planning)·계리팀(actuarial) 등 **부서별 AI 에이전트**를 제공하는 Next.js 앱입니다.
+보험금기획팀(claims-planning)·계리팀(actuarial) 등 **부서별 AI 에이전트**를 제공하는 Next.js 앱입니다.
 각 부서는 고유한 페르소나·스킬·도구를 가집니다.
 
 ## 부서(에이전트) 구조
@@ -16,7 +16,7 @@
 | 도구 목록 | `src/agent-tools/<부서키>.ts` | 부서가 사용할 도구 지정 |
 
 현재 부서:
-- `claims-planning` — 보험금심사기획 부서장
+- `claims-planning` — 보험금기획 부서장
 - `actuarial` — 계리 부서장
 
 ## 부서별 도구 구성

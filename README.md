@@ -37,7 +37,7 @@ cd app
 npm install
 cp .env.example .env    # RAGFLOW_API_KEY, LLM_BASE_URL, LLM_API_KEY 설정
 npm run db:push         # 스키마 생성
-npm run db:seed         # 부서 시드 (보험금심사기획, 계리)
+npm run db:seed         # 부서 시드 (보험금기획, 계리)
 npm run dev            # http://localhost:3000
 ```
 - 첫 가입자가 자동 관리자(active), 이후 가입자는 관리자 승인(pending)

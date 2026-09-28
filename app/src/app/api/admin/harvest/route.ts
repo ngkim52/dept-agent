@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     return Response.json({
       accepted: result.accepted,
       createdCount: result.createdCount,
+      skillCreatedCount: result.skillCreatedCount,
     });
   } catch (e) { return jsonError(e); }
 }

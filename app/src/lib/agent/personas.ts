@@ -38,7 +38,7 @@ export function baseSystemPrompt(role: string): string {
 export const personas: Record<string, Persona> = {
   "claims-planning": {
     key: "claims-planning",
-    departmentName: "보험금심사기획",
+    departmentName: "보험금기획",
     role: "보험금기획팀장",
     systemPrompt: baseSystemPrompt("보험금기획팀장"),
   },

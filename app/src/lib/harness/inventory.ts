@@ -13,7 +13,7 @@ import type { HarnessEntryType } from "./store";
 // UI에서 사용할 부서(페르소나) 선택지
 export const PERSONA_OPTIONS = ["claims-planning", "actuarial"] as const;
 export const PERSONA_NAMES: Record<string, string> = {
-  "claims-planning": "보험금심사기획",
+  "claims-planning": "보험금기획",
   actuarial: "계리",
 };
 

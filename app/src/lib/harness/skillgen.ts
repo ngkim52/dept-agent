@@ -4,6 +4,7 @@
 // 생성 결과는 초안(draft)이며 사용자 확인·저장 후에만 knowledge_skills에 반영된다.
 import { getLlmModel } from "@/lib/agent/llm";
 import { getPersonaSkills } from "@/lib/agent/skills";
+import { skillAuthoringGuide } from "./skillGuide";
 import { listMemories, createSkill } from "./store";
 import { webSearch } from "@/lib/agent/websearch";
 import { db, schema } from "@/lib/db";
@@ -97,11 +98,15 @@ function needsWebSearch(sources: SkillGenContextSource[]): boolean {
   return meaningful.length === 0;
 }
 
-const BUILDER_SYSTEM = `당신은 스킬 설계자(스킬 생성기)입니다. 부서 페르소나에 주입되는 스킬(SKILL.md: 행동원칙·사고방식·업무절차)을 설계·작성합니다.
+function builderSystem(personaKey: string): string {
+  return `당신은 스킬 설계자(스킬 생성기)입니다. 부서 페르소나에 주입되는 스킬(SKILL.md: 행동원칙·사고방식·업무절차)을 설계·작성합니다.
+
+${skillAuthoringGuide(personaKey)}
+
 참조 데이터(기존 스킬·메모리·과거 대화·문서·웹검색)를 바탕으로, 다음 JSON만 출력하세요(설명 없이):
 {
   "name": "<스킬 이름>",
-  "description": "<언제 사용하는지 + 라우팅 조건 + 범위 배제 문구, 1~3문장>",
+  "description": "<언제 사용하는지 + 라우팅 조건 + 범위 배제 문구, 1~2문장>",
   "content": "<SKILL.md 본문>"
 }
 content는 아래 구조를 따릅니다:
@@ -116,10 +121,11 @@ content는 아래 구조를 따릅니다:
 - description에 다른 스킬과 겹치지 않도록 범위 배제 문구를 넣으세요.
 - 한 스킬에 업무를 몰아넣지 말고 목적이 명확한 단위로 작성하세요.
 - content는 마크다운 본문(요구시점/판단기준/데이터사용/출력 섹션)만 포함합니다.`;
+}
 
 /** 참조 데이터 → LLM 프롬프트 조립 */
 export function buildSkillBuilderPrompt(topic: string, personaKey: string, srcs: SkillGenContextSource[], web: string[]): string {
-  const personaLabel = personaKey === "actuarial" ? "계리" : "보험금심사기획";
+  const personaLabel = personaKey === "actuarial" ? "계리" : "보험금기획";
   const lines = [`대상 부서(페르소나): ${personaLabel} (${personaKey})`, `사용자가 만들고 싶은 스킬: ${topic}`, ""];
   if (srcs.length) {
     lines.push("── 참조 데이터 ──");
@@ -136,10 +142,10 @@ export function buildSkillBuilderPrompt(topic: string, personaKey: string, srcs:
 }
 
 /** LLM 호출 — response 모델로 스킬 초안 생성 */
-async function callSkillBuilder(prompt: string): Promise<string> {
+async function callSkillBuilder(prompt: string, personaKey: string): Promise<string> {
   const { models, model } = await getLlmModel("response");
   const res = await models.completeSimple(model, {
-    messages: [{ role: "user" as const, content: BUILDER_SYSTEM + "\n\n" + prompt, timestamp: Date.now() }],
+    messages: [{ role: "user" as const, content: builderSystem(personaKey) + "\n\n" + prompt, timestamp: Date.now() }],
   });
   const text = (res?.content ?? [])
     .filter((t: any) => t?.type === "text")
@@ -189,7 +195,7 @@ export async function generateSkillDraft(topic: string, personaKey: string, opts
   }
 
   const prompt = buildSkillBuilderPrompt(t, personaKey, sources, web.results);
-  const raw = await callSkillBuilder(prompt);
+  const raw = await callSkillBuilder(prompt, personaKey);
   const draft = parseSkillDraft(raw);
   const related = findRelatedSkills(personaKey, t, draft.name);
   return { ...draft, relatedSkills: related, webUsed: web.used };

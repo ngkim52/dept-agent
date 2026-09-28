@@ -131,13 +131,16 @@ async function ensureSeed() {
     const { departments, users } = await import("@/lib/db/schema");
     const { eq, and } = await import("drizzle-orm");
     const DEPTS = [
-      { id: "claims-planning", name: "보험금심사기획", personaKey: "claims-planning" },
+      { id: "claims-planning", name: "보험금기획", personaKey: "claims-planning" },
       { id: "actuarial", name: "계리", personaKey: "actuarial" },
     ];
     for (const dep of DEPTS) {
       const exists = await db.query.departments.findFirst({ where: eq(departments.id, dep.id) });
       if (!exists) {
         await db.insert(departments).values({ ...dep, isActive: true, createdAt: new Date() }).onConflictDoNothing();
+      } else if (exists.name !== dep.name) {
+        // 부서명 정정(예: 보험금심사기획 → 보험금기획)이 기존 DB에도 반영되도록 갱신
+        await db.update(departments).set({ name: dep.name }).where(eq(departments.id, dep.id));
       }
     }
     const adminEmail = process.env.ADMIN_EMAIL;
