@@ -412,8 +412,8 @@ function DirectorScheduleCard({ items, onSave, onDelete }: { items: any[]; onSav
   const dow = (today.getDay() + 6) % 7;           // 월=0
   monday.setDate(today.getDate() - dow);
   const fc = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const wd = ["월", "화", "수", "목", "금", "토", "일"];
-  const days = Array.from({ length: 7 }, (_, k) => { const d = new Date(monday); d.setDate(monday.getDate() + k); return { wd: wd[k], date: fc(d), dateTxt: `${d.getMonth() + 1}/${d.getDate()}`, isToday: fc(d) === fc(today) }; });
+  const wd = ["월", "화", "수", "목", "금"];   // 주말 제외(평일만)
+  const days = Array.from({ length: 5 }, (_, k) => { const d = new Date(monday); d.setDate(monday.getDate() + k); return { wd: wd[k], date: fc(d), dateTxt: `${d.getMonth() + 1}/${d.getDate()}`, isToday: fc(d) === fc(today) }; });
   const hours = Array.from({ length: 10 }, (_, k) => k + 9);   // 9시~18시
   const byKey = (date: string, h: number) => (items || []).filter(x => String(x.date) === date && (x.time ? Number(x.time.slice(0, 2)) : 9) === h);
   const openCreate = (date: string, time: string) => setPop({ date, time, title: "", note: "", attendees: "", location: "" });
@@ -423,10 +423,10 @@ function DirectorScheduleCard({ items, onSave, onDelete }: { items: any[]; onSav
   return (
     <div className="cd" style={{ minWidth: 0, overflow: "hidden" }}>
       <div className="cd-head"><Lvl tone="a" size={26} icon="cal" iconSize={13} /><h3>부서장 일정 <span style={{ fontSize: 10, color: "var(--ink-faint)", fontFamily: "var(--mono,monospace)" }}>주간</span></h3></div>
-      <div style={{ display: "grid", gridTemplateColumns: "34px repeat(7, minmax(0, 1fr))", gap: 3, overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "34px repeat(5, minmax(0, 1fr))", gap: 3, overflow: "hidden" }}>
         <div />
         {days.map(d => (
-          <div key={d.date} style={{ textAlign: "center", fontSize: 10, fontWeight: d.isToday ? 800 : 600, color: d.wd === "일" || d.wd === "토" ? "#9F2F2D" : "var(--ink)", background: d.isToday ? "#F6EFDF" : "transparent", borderRadius: 6, padding: "3px 0", minWidth: 0 }}>
+          <div key={d.date} style={{ textAlign: "center", fontSize: 10, fontWeight: d.isToday ? 800 : 600, color: "var(--ink)", background: d.isToday ? "#F6EFDF" : "transparent", borderRadius: 6, padding: "3px 0", minWidth: 0 }}>
             <div>{d.wd}</div><div style={{ fontSize: 9, color: "var(--ink-faint)" }}>{d.dateTxt}</div>
           </div>
         ))}
