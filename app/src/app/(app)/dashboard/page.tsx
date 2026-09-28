@@ -403,8 +403,10 @@ function DeadlineCard({ tasks }: { tasks: any[] }) {
     </div>
   );
 }
-function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd: (v: { date: string; time: string; title: string; note: string }) => void; onDelete: (id: string) => void }) {
-  const [pop, setPop] = useState<{ date: string; time: string; title: string; note: string } | null>(null);
+type ScheduleDraft = { id?: string; date: string; time: string; title: string; note: string; attendees: string; location: string };
+
+function DirectorScheduleCard({ items, onSave, onDelete }: { items: any[]; onSave: (v: ScheduleDraft) => void; onDelete: (id: string) => void }) {
+  const [pop, setPop] = useState<ScheduleDraft | null>(null);
   const today = new Date();
   const monday = new Date(today);
   const dow = (today.getDay() + 6) % 7;           // 월=0
@@ -414,14 +416,17 @@ function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd:
   const days = Array.from({ length: 7 }, (_, k) => { const d = new Date(monday); d.setDate(monday.getDate() + k); return { wd: wd[k], date: fc(d), dateTxt: `${d.getMonth() + 1}/${d.getDate()}`, isToday: fc(d) === fc(today) }; });
   const hours = Array.from({ length: 10 }, (_, k) => k + 9);   // 9시~18시
   const byKey = (date: string, h: number) => (items || []).filter(x => String(x.date) === date && (x.time ? Number(x.time.slice(0, 2)) : 9) === h);
-  const save = () => { if (!pop) return; onAdd(pop); setPop(null); };
+  const openCreate = (date: string, time: string) => setPop({ date, time, title: "", note: "", attendees: "", location: "" });
+  const openEdit = (it: any) => setPop({ id: it.id, date: String(it.date), time: it.time ?? "", title: it.title ?? "", note: it.note ?? "", attendees: it.attendees ?? "", location: it.location ?? "" });
+  const save = () => { if (!pop || !pop.title.trim()) return; onSave({ ...pop, title: pop.title.trim() }); setPop(null); };
+  const inputStyle = { width: "100%", boxSizing: "border-box" as const, padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, marginBottom: 7 };
   return (
-    <div className="cd" style={{ minWidth: 0 }}>
+    <div className="cd" style={{ minWidth: 0, overflow: "hidden" }}>
       <div className="cd-head"><Lvl tone="a" size={26} icon="cal" iconSize={13} /><h3>부서장 일정 <span style={{ fontSize: 10, color: "var(--ink-faint)", fontFamily: "var(--mono,monospace)" }}>주간</span></h3></div>
-      <div style={{ display: "grid", gridTemplateColumns: "34px repeat(7, 1fr)", gap: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "34px repeat(7, minmax(0, 1fr))", gap: 3, overflow: "hidden" }}>
         <div />
         {days.map(d => (
-          <div key={d.date} style={{ textAlign: "center", fontSize: 10, fontWeight: d.isToday ? 800 : 600, color: d.wd === "일" || d.wd === "토" ? "#9F2F2D" : "var(--ink)", background: d.isToday ? "#F6EFDF" : "transparent", borderRadius: 6, padding: "3px 0" }}>
+          <div key={d.date} style={{ textAlign: "center", fontSize: 10, fontWeight: d.isToday ? 800 : 600, color: d.wd === "일" || d.wd === "토" ? "#9F2F2D" : "var(--ink)", background: d.isToday ? "#F6EFDF" : "transparent", borderRadius: 6, padding: "3px 0", minWidth: 0 }}>
             <div>{d.wd}</div><div style={{ fontSize: 9, color: "var(--ink-faint)" }}>{d.dateTxt}</div>
           </div>
         ))}
@@ -431,12 +436,15 @@ function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd:
             {days.map(d => {
               const its = byKey(d.date, h);
               return (
-                <div key={d.date + h} onClick={() => setPop({ date: d.date, time: `${String(h).padStart(2, "0")}:00`, title: "", note: "" })} title="클릭하여 일정 등록"
-                  style={{ minHeight: 26, border: "1px solid var(--line,#EFECE6)", borderRadius: 6, padding: 2, cursor: "pointer", background: its.length ? "#F6EFDF" : "#FDFCFA" }}>
+                <div key={d.date + h} onClick={() => (its.length ? openEdit(its[0]) : openCreate(d.date, `${String(h).padStart(2, "0")}:00`))}
+                  title={its.length ? "클릭하여 일정 수정" : "클릭하여 일정 등록"}
+                  style={{ minWidth: 0, minHeight: 26, border: "1px solid var(--line,#EFECE6)", borderRadius: 6, padding: 2, cursor: "pointer", overflow: "hidden", background: its.length ? "#F6EFDF" : "#FDFCFA" }}>
                   {its.map(it => (
-                    <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 8.5, lineHeight: 1.2, color: "#8A6116" }}>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{it.time ? it.time.slice(0, 5) + " " : ""}{it.title}</span>
-                      <button onClick={e => { e.stopPropagation(); onDelete(it.id); }} style={{ border: "none", background: "transparent", color: "#9F2F2D", cursor: "pointer", padding: 0, fontSize: 9 }}>×</button>
+                    <div key={it.id} onClick={e => { e.stopPropagation(); openEdit(it); }}
+                      title={[it.time ? it.time.slice(0, 5) : "", it.title, it.location ? "장소: " + it.location : "", it.attendees ? "참석: " + it.attendees : "", it.note ? "메모: " + it.note : ""].filter(Boolean).join(" · ")}
+                      style={{ display: "flex", alignItems: "center", gap: 3, minWidth: 0, fontSize: 8.5, lineHeight: 1.2, color: "#8A6116" }}>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{it.time ? it.time.slice(0, 5) + " " : ""}{it.title}</span>
+                      <button onClick={e => { e.stopPropagation(); onDelete(it.id); }} title="삭제" style={{ border: "none", background: "transparent", color: "#9F2F2D", cursor: "pointer", padding: 0, fontSize: 9, flexShrink: 0 }}>×</button>
                     </div>
                   ))}
                 </div>
@@ -445,15 +453,23 @@ function DirectorScheduleCard({ items, onAdd, onDelete }: { items: any[]; onAdd:
           </div>
         ))}
       </div>
+      <p style={{ margin: "8px 0 0", fontSize: 10, color: "var(--ink-faint)" }}>빈 칸을 클릭해 등록하고, 등록된 일정을 클릭하면 수정할 수 있습니다.</p>
       {pop && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(20,20,18,0.4)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={() => setPop(null)}>
-          <div style={{ background: "#fff", borderRadius: 14, padding: 16, width: "min(360px, 92vw)", boxShadow: "0 18px 50px rgba(0,0,0,.18)" }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>일정 등록 · {pop.date} {pop.time}</div>
-            <input value={pop.title} onChange={e => setPop({ ...pop, title: e.target.value })} placeholder="일정 제목" autoFocus style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, marginBottom: 7 }} />
-            <input value={pop.note} onChange={e => setPop({ ...pop, note: e.target.value })} placeholder="메모 (선택)" style={{ width: "100%", boxSizing: "border-box", padding: "8px 10px", fontSize: 13, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, marginBottom: 10 }} />
+          <div style={{ background: "#fff", borderRadius: 14, padding: 16, width: "min(380px, 92vw)", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 18px 50px rgba(0,0,0,.18)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>{pop.id ? "일정 수정" : "일정 등록"} · {pop.date}{pop.time ? " " + pop.time : ""}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 7 }}>
+              <input type="date" value={pop.date} onChange={e => setPop({ ...pop, date: e.target.value })} style={{ ...inputStyle, marginBottom: 0 }} />
+              <input type="time" value={pop.time} onChange={e => setPop({ ...pop, time: e.target.value })} style={{ ...inputStyle, marginBottom: 0 }} />
+            </div>
+            <input value={pop.title} onChange={e => setPop({ ...pop, title: e.target.value })} placeholder="일정 제목 (필수)" autoFocus style={inputStyle} />
+            <input value={pop.attendees} onChange={e => setPop({ ...pop, attendees: e.target.value })} placeholder="참석자 (예: 부서장, 심사파트장)" style={inputStyle} />
+            <input value={pop.location} onChange={e => setPop({ ...pop, location: e.target.value })} placeholder="장소 (예: 3층 회의실)" style={inputStyle} />
+            <textarea value={pop.note} onChange={e => setPop({ ...pop, note: e.target.value })} placeholder="메모 (선택)" style={{ ...inputStyle, minHeight: 56, resize: "vertical", fontFamily: "inherit" }} />
             <div style={{ display: "flex", gap: 8 }}>
+              {pop.id && <button onClick={() => { onDelete(pop.id!); setPop(null); }} style={{ padding: "9px 12px", fontSize: 12.5, border: "1px solid #F3D1D0", borderRadius: 8, background: "#FBE9E9", color: "#9F2F2D", cursor: "pointer" }}>삭제</button>}
               <button onClick={() => setPop(null)} style={{ flex: 1, padding: "9px 0", fontSize: 12.5, border: "1px solid var(--line,#E6E2DB)", borderRadius: 8, background: "#fff", cursor: "pointer" }}>취소</button>
-              <button onClick={save} style={{ flex: 1, padding: "9px 0", fontSize: 12.5, fontWeight: 600, color: "#fff", background: "#8A6116", border: "none", borderRadius: 8, cursor: "pointer" }}>등록</button>
+              <button onClick={save} disabled={!pop.title.trim()} style={{ flex: 1, padding: "9px 0", fontSize: 12.5, fontWeight: 600, color: "#fff", background: "#8A6116", border: "none", borderRadius: 8, cursor: pop.title.trim() ? "pointer" : "not-allowed", opacity: pop.title.trim() ? 1 : 0.5 }}>{pop.id ? "수정" : "등록"}</button>
             </div>
           </div>
         </div>
@@ -683,7 +699,7 @@ export default function Dashboard() {
   const setProgress = (id: string, pct: number) => fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ progress: pct }) }).then(loadWork).catch(() => {});
   const completeTask = (id: string) => fetch(`/api/workqueue/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ complete: true }) }).then(loadWork).catch(() => {});
   const delSchedule = (id: string) => fetch(`/api/schedule/${id}`, { method: "DELETE" }).then(loadSchedule).catch(() => {});
-  const addSchedule = (v: { date: string; time: string; title: string; note: string }) => fetch("/api/schedule", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) }).then(loadSchedule).catch(() => {});
+  const saveSchedule = (v: ScheduleDraft) => fetch(v.id ? `/api/schedule/${v.id}` : "/api/schedule", { method: v.id ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(v) }).then(loadSchedule).catch(() => {});
   const dash = data?.dash;
   const [meeting, setMeeting] = useState<SectionReview | null>(null);
   const [selKpi, setSelKpi] = useState<string | null>(null);
@@ -754,7 +770,7 @@ export default function Dashboard() {
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>
               <DeadlineCard tasks={workTasks} />
-              <DirectorScheduleCard items={schedule} onAdd={addSchedule} onDelete={delSchedule} />
+              <DirectorScheduleCard items={schedule} onSave={saveSchedule} onDelete={delSchedule} />
             </div>
 
             <div className="dab-row g2" style={{ marginTop: 16, alignItems: "stretch" }}>

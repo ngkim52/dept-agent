@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
       time: body.time ? String(body.time) : undefined,
       title: String(body.title),
       note: body.note ? String(body.note) : undefined,
+      attendees: body.attendees ? String(body.attendees) : undefined,
+      location: body.location ? String(body.location) : undefined,
     }, user.id);
     return Response.json({ item });
   } catch (e) { return jsonError(e); }

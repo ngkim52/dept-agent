@@ -359,6 +359,8 @@ export const directorSchedule = sqliteTable("director_schedule", {
   time: text("time"),                        // "HH:MM" (선택)
   title: text("title").notNull(),
   note: text("note"),
+  attendees: text("attendees"),               // 참석자 (쉼표 구분, 선택)
+  location: text("location"),                 // 장소 (선택)
   createdBy: text("created_by"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),

@@ -13,6 +13,11 @@ export async function listDirectorSchedule(): Promise<ScheduleItem[]> {
   return rows;
 }
 
+export async function getDirectorSchedule(id: string): Promise<ScheduleItem | null> {
+  const rows = await db.select().from(schema.directorSchedule).where(eq(schema.directorSchedule.id, id)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function createDirectorSchedule(input: Partial<NewScheduleItem>, createdBy?: string): Promise<ScheduleItem> {
   const id = randomUUID();
   const t = now();
@@ -22,6 +27,8 @@ export async function createDirectorSchedule(input: Partial<NewScheduleItem>, cr
     time: input.time ?? null,
     title: input.title ?? "",
     note: input.note ?? null,
+    attendees: input.attendees ?? null,
+    location: input.location ?? null,
     createdBy: createdBy ?? null,
     createdAt: t,
     updatedAt: t,
@@ -29,6 +36,21 @@ export async function createDirectorSchedule(input: Partial<NewScheduleItem>, cr
   await db.insert(schema.directorSchedule).values(row);
   const rows = await db.select().from(schema.directorSchedule).where(eq(schema.directorSchedule.id, id)).limit(1);
   return rows[0];
+}
+
+/** 일정 수정 — 전달된 필드만 갱신 (참석자·장소 포함) */
+export async function updateDirectorSchedule(id: string, input: Partial<NewScheduleItem>): Promise<ScheduleItem | null> {
+  const before = await getDirectorSchedule(id);
+  if (!before) return null;
+  const patch: Partial<NewScheduleItem> = { updatedAt: now() };
+  if (input.date !== undefined) patch.date = input.date;
+  if (input.time !== undefined) patch.time = input.time;
+  if (input.title !== undefined) patch.title = input.title;
+  if (input.note !== undefined) patch.note = input.note;
+  if (input.attendees !== undefined) patch.attendees = input.attendees;
+  if (input.location !== undefined) patch.location = input.location;
+  await db.update(schema.directorSchedule).set(patch).where(eq(schema.directorSchedule.id, id));
+  return getDirectorSchedule(id);
 }
 
 export async function deleteDirectorSchedule(id: string): Promise<boolean> {

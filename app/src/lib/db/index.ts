@@ -83,12 +83,18 @@ try {
     time text,
     title text NOT NULL,
     note text,
+    attendees text,
+    location text,
     created_by text,
     created_at integer NOT NULL,
     updated_at integer NOT NULL
   );
   CREATE INDEX IF NOT EXISTS director_schedule_date_idx ON director_schedule (date);`);
 } catch { /* 무시 */ }
+
+// director_schedule 컬럼 보강 (참석자·장소) — 기존 DB에도 멱등 반영
+try { sqlite.exec(`ALTER TABLE director_schedule ADD COLUMN attendees text;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE director_schedule ADD COLUMN location text;`); } catch { /* 이미 존재 */ }
 
 function syncMigrationJournal() {
   try {
