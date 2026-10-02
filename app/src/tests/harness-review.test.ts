@@ -101,6 +101,24 @@ describe("generateEpisodeForDepartment (QA→에피소드 압축 파이프라인
     expect(cs[0].sourceKind).toBe("episode");
     expect(cs[0].sourceId).toBe(res.episode.id);
   });
+
+  it("compact 응답이 잘려도(Unterminated string) 500 없이 부분 복원해 episode 생성", async () => {
+    const { randomUUID } = await import("node:crypto");
+    const user = await (await import("./helpers")).withUser({ role: "user", departmentId: "claims-planning" });
+    const conv = { id: randomUUID(), userId: user.id, departmentId: "claims-planning", createdAt: new Date() };
+    await db.insert(schema.conversations).values(conv);
+    await db.insert(schema.messages).values([
+      { id: randomUUID(), conversationId: conv.id, role: "user", content: "손해율이 5% 초과했어", createdAt: new Date() },
+      { id: randomUUID(), conversationId: conv.id, role: "assistant", content: "원인분석을 시작하세요.", createdAt: new Date() },
+    ]);
+    // 모델 토큰 한도로 문장 중간에 잘린 응답 (기존에는 JSON.parse 예외 → 500)
+    const call = async () => '{"summary":"손해율 초과 문의","conclusion":"5% 초과 시 원인분석 착수","reusable_rules":["손해율 5% 초과 시 원인분석을 무조건 착수';
+    const { generateEpisodeForDepartment, listCandidates } = await import("@/lib/harness/review");
+    const res = await generateEpisodeForDepartment("claims-planning", "보험금기획팀", call);
+    expect(res.episode.status).toBe("ready");
+    expect(res.episode.summary).toBe("손해율 초과 문의");
+    expect((await listCandidates({ personaKey: "claims-planning" })).length).toBeGreaterThanOrEqual(1);
+  });
 });
 
 

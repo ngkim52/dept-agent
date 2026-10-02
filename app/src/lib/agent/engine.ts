@@ -404,11 +404,19 @@ export async function runPersonaAgent(
   let text = "";
   let thinkingBuf = "";
   let thinkingStarted = false;
+  // 모델이 오류로 끝난 경우(예: 추론 필수 모델에 thinkingLevel "off") 텍스트 없이 조용히 끝나므로,
+  // 호출자가 빈 답변을 정상 답변으로 오인하지 않도록 마지막 assistant 메시지의 종료 사유를 기록한다.
+  let stopReason: string | undefined;
+  let errorMessage: string | undefined;
   const unsubscribe = agent.subscribe((ev) => {
     if (ev.type === "message_update" && ev.assistantMessageEvent?.type === "text_delta") {
       const delta = ev.assistantMessageEvent.delta;
       text += delta;
       cb.onTextDelta(delta);
+    }
+    if (ev.type === "message_end") {
+      const m = (ev as { message?: { role?: string; stopReason?: string; errorMessage?: string } }).message;
+      if (m?.role === "assistant") { stopReason = m.stopReason; errorMessage = m.errorMessage; }
     }
     // 실제 추론(reasoning) 텍스트 수집 → 진행 패널에 노출
     if (ev.type === "message_update" && ev.assistantMessageEvent?.type) {
@@ -441,5 +449,8 @@ export async function runPersonaAgent(
   );
 
   unsubscribe();
+  if (!text.trim() && stopReason === "error") {
+    throw new Error("부서장 에이전트 응답 오류: " + (errorMessage || "모델이 오류를 반환했습니다."));
+  }
   return { text, webCitations: [...new Map(webCitations.map((c) => [c.url, c])).values()] };
 }

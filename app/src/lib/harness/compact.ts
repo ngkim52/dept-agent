@@ -1,6 +1,7 @@
 // 지식 하네스 — Q&A 압축(compact) 파이프라인
 // compact 모델로 부서원 대화 묶음을 "질문 요약 + 결론 + 재사용 규칙"으로 추출한다.
 import { getLlmModel } from "@/lib/agent/llm";
+import { parseJsonLoose } from "@/lib/util/jsonLoose";
 
 export interface EpisodeQa {
   messageId: string;
@@ -42,15 +43,12 @@ export async function realCompactCall(prompt: string): Promise<string> {
   return text;
 }
 
-/** 프롬프트 → JSON 파싱 (코드블록·잡음 제거) */
+/** 프롬프트 → JSON 파싱 (코드블록·잡음 제거 + 콤마 누락·잘림 복원) */
 export function parseEpisodeJson(raw: string): EpisodeExtraction {
-  let s = raw.trim();
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fence) s = fence[1].trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start >= 0 && end > start) s = s.slice(start, end + 1);
-  const parsed = JSON.parse(s);
+  const parsed = parseJsonLoose<Record<string, unknown>>(raw);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("compact 모델 응답에서 JSON 객체를 찾지 못했습니다.");
+  }
   return {
     summary: String(parsed.summary ?? ""),
     conclusion: String(parsed.conclusion ?? ""),

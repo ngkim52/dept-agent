@@ -3,6 +3,7 @@
 // 관련성·근거충실성·지식공백·시점정합성·완결성을 0~100 점수화한다.
 // 과거 종료 이벤트를 현재로 오인하는 "시점 오류"를 중점 검증한다.
 // 평가·질문·답변의 LLM 호출은 테스트에서 주입 가능(call/ask/judge).
+import { parseJsonLoose } from "@/lib/util/jsonLoose";
 
 export interface DryrunQuestion { id: string; question: string; intent: string; }
 export interface DryrunCategory { key: string; label: string; emoji?: string; questions: DryrunQuestion[]; }
@@ -87,11 +88,13 @@ export async function defaultAsk(personaKey: string, question: string): Promise<
   await runPersonaAgent(persona, question, [], chunks, {
     onTextDelta(d) { text += d; },
     onProgress() {},
-  }, { thinkingLevel: "off" }, { style: "conclusion" });
-  return { text: text.trim(), retrieved: chunks.map((c) => c.content) };
+    // 주의: thinkingLevel "off"는 추론 비활성화 → 추론을 필수로 요구하는 모델(예: openai/gpt-6-astra)에서
+    // 400 "Reasoning is mandatory…" 오류가 나고 답변이 비어버린다. 드라이런은 추론을 켠 낮은 수준으로 실행한다.
+  }, { thinkingLevel: "low" }, { style: "conclusion" });
+  const answer = text.trim();
+  if (!answer) throw new Error("부서장 에이전트가 빈 답변을 반환했습니다. (모델 오류 또는 생각 수준 설정 확인)");
+  return { text: answer, retrieved: chunks.map((c) => c.content) };
 }
-
-const JSON_FENCE = /```(?:json)?\s*([\s\S]*?)\s*```/;
 
 export type JudgeFn = (q: string, a: string, retrieved: string[], call: (p: string) => Promise<string>) => Promise<Pick<DryrunResult, "dimensions" | "findings">>;
 
@@ -107,9 +110,14 @@ export const defaultJudge: JudgeFn = async (q, a, retrieved, call) => {
     "--- 에이전트 답변 ---\n" + a,
   ].join("\n");
   const raw = (await call(prompt)).trim();
-  const m = raw.match(JSON_FENCE);
-  const body = (m ? m[1] : raw).replace(/^[^\[{]*/, "").trim();
-  const j = JSON.parse(body);
+  const j = parseJsonLoose<{ dimensions?: any[]; findings?: any[] }>(raw);
+  if (!j || typeof j !== "object" || Array.isArray(j)) {
+    // JSON을 해석하지 못해도 500 대신 0점 + 경고 지적으로 저하한다.
+    return {
+      dimensions: DRYRUN_DIMENSIONS.map((d) => ({ key: d.key, label: d.label, score: 0, reason: "판정 응답을 JSON으로 해석하지 못했습니다." })),
+      findings: [{ level: "warn" as const, text: "판정자 응답을 JSON으로 해석하지 못해 점수를 계산할 수 없습니다." }],
+    };
+  }
   const dims: DryrunDimension[] = DRYRUN_DIMENSIONS.map((d) => {
     const found = (j.dimensions ?? []).find((x: any) => x.key === d.key);
     return { key: d.key, label: d.label, score: clampScore(Number(found?.score)), reason: String(found?.reason ?? "") };

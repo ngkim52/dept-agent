@@ -2,6 +2,7 @@
 // 활성 지식(메모리·규칙·스킬)을 LLM이 보고 연관/지원/충돌/전제 관계를 제안하면
 // knowledge_edges에 저장한다. 사람이 직접 연결을 만들 필요가 없다.
 // LLM 호출은 테스트에서 call 파라미터로 주입 가능.
+import { parseJsonLoose } from "@/lib/util/jsonLoose";
 
 export type EdgeRel = "derives" | "refutes" | "supports" | "related" | "source_of";
 export const REL_LABEL: Record<string, string> = {
@@ -14,8 +15,6 @@ export const REL_LABEL: Record<string, string> = {
 
 export interface GraphItem { type: "memory" | "prompt" | "skill"; id: string; label: string; content: string; }
 export interface ProposedEdge { fromType: GraphItem["type"]; fromId: string; toType: GraphItem["type"]; toId: string; rel: EdgeRel; reason: string; }
-
-const JSON_FENCE = /```(?:json)?\s*([\s\S]*?)\s*```/;
 
 /** 활성 지식 항목 수집 (메모리·규칙·스킬) */
 export async function collectGraphItems(personaKey: string): Promise<GraphItem[]> {
@@ -41,9 +40,8 @@ export async function proposeGraphRelations(personaKey: string, items: GraphItem
     "--- 항목 목록 ---\n" + list,
   ].join("\n");
   const raw = (await call(prompt)).trim();
-  const m = raw.match(JSON_FENCE);
-  const body = (m ? m[1] : raw).replace(/^[^\[{]*/, "").trim();
-  const j = JSON.parse(body);
+  const j = parseJsonLoose<{ edges?: any[] }>(raw);
+  if (!j || typeof j !== "object" || Array.isArray(j)) return [];
   const ids = new Set(items.map((it) => it.id));
   const valid: EdgeRel[] = ["derives", "refutes", "supports", "related", "source_of"];
   const edges: ProposedEdge[] = [];

@@ -4,6 +4,7 @@
 // 생성 결과는 초안(draft)이며 사용자 확인·저장 후에만 knowledge_skills에 반영된다.
 import { getLlmModel } from "@/lib/agent/llm";
 import { getPersonaSkills } from "@/lib/agent/skills";
+import { parseJsonLoose } from "@/lib/util/jsonLoose";
 import { skillAuthoringGuide } from "./skillGuide";
 import { listMemories, createSkill } from "./store";
 import { webSearch } from "@/lib/agent/websearch";
@@ -157,13 +158,10 @@ async function callSkillBuilder(prompt: string, personaKey: string): Promise<str
 
 /** LLM 응답에서 JSON 객체 추출 */
 export function parseSkillDraft(raw: string): { name: string; description: string; content: string } {
-  let s = raw.trim();
-  const fence = s.match(/````(?:json)?\s*([\s\S]*?)````/);
-  if (fence) s = fence[1].trim();
-  const start = s.indexOf("{");
-  const end = s.lastIndexOf("}");
-  if (start >= 0 && end > start) s = s.slice(start, end + 1);
-  const obj = JSON.parse(s);
+  const obj = parseJsonLoose<Record<string, unknown>>(raw);
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    throw new Error("스킬 생성 모델 응답에서 JSON 객체를 찾지 못했습니다.");
+  }
   const name = String(obj.name ?? "").trim();
   const description = String(obj.description ?? "").trim();
   const content = String(obj.content ?? "").trim();

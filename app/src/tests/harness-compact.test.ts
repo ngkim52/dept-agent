@@ -12,6 +12,18 @@ describe("compact.paresEpisodeJson", () => {
     expect(r.summary).toBe("질문 요약");
     expect(r.conclusion).toBe("결론");
   });
+  it("잘린(truncated) JSON도 부분 복원 — 500 방지", () => {
+    const raw = '{"summary":"손해율 초과","conclusion":"원인분석 착수","reusable_rules":["무조건 착수","5% 기준 점검';
+    const r = parseEpisodeJson(raw);
+    expect(r.summary).toBe("손해율 초과");
+    expect(r.conclusion).toBe("원인분석 착수");
+    expect(r.reusable_rules).toEqual(["무조건 착수", "5% 기준 점검"]);
+  });
+  it("콤마 누락·trailing comma가 섞여도 복원", () => {
+    const raw = '{"summary":"s"\n"conclusion":"c",\n"reusable_rules":["r1","r2",],}';
+    const r = parseEpisodeJson(raw);
+    expect(r).toEqual({ summary: "s", conclusion: "c", reusable_rules: ["r1", "r2"] });
+  });
 });
 
 describe("extractEpisode", () => {

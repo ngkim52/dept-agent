@@ -75,6 +75,17 @@ describe("runPersonaAgent", () => {
     const q = userContents.filter((u) => u.includes("[질문/업무 내용]\n지금 질문입니다"));
     expect(q).toHaveLength(1);
   });
+
+  it("모델이 오류로 끝나고 텍스트가 없으면 조용히 빈 답변 대신 예외로 알린다", async () => {
+    mocks.streamFn.mockImplementation(() => {
+      const s = createAssistantMessageEventStream();
+      s.push({ type: "start", partial: { role: "assistant", content: [], api: "openai-completions", provider: "litellm", model: "openai/gpt-6-astra", stopReason: "in_progress", timestamp: Date.now() } as any });
+      s.end({ role: "assistant", content: [], api: "openai-completions", provider: "litellm", model: "openai/gpt-6-astra", stopReason: "error", errorMessage: "400: Reasoning is mandatory for this endpoint and cannot be disabled.", timestamp: Date.now() } as any);
+      return s;
+    });
+    const persona = getPersona("claims-planning")!;
+    await expect(runPersonaAgent(persona, "질문", [], [], { onTextDelta: () => {} })).rejects.toThrow(/Reasoning is mandatory/);
+  });
 });
 
 describe("웹서치 툴", () => {
