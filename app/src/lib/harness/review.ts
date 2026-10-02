@@ -61,18 +61,37 @@ export async function listCandidates(opts?: { personaKey?: string; status?: Impr
   return rows.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+/** 대기(pending) 큐 상한 — 신뢰도 상위 N건만 유지한다 */
+export const MAX_PENDING_CANDIDATES = 50;
+
 /**
- * 유효 기간이 지난 미결정(대기) 적용 후보를 정리한다.
- * 어떤 선택(적용/거절)도 없이 ttl(기본 1주일)을 넘긴 대기 후보는 큐에서 제거한다.
+ * 대기(pending) 적용 후보 큐 정리.
+ *  ① 어떤 선택(적용/거절)도 없이 ttl(기본 1주일)을 넘긴 후보는 삭제(오래된 건 정리)
+ *  ② 그래도 상한(maxPending, 기본 50)을 넘으면 **신뢰도가 낮은 것부터** 삭제해
+ *     "가장 적용해야 할 내용" 상위 50건만 남긴다.
+ * 동률이면 최근 것을 남긴다(createdAt desc).
+ * @returns 삭제된 총 건수
  */
-export async function pruneStaleCandidates(ttlMs = 7 * 24 * 60 * 60 * 1000): Promise<number> {
+export async function pruneStaleCandidates(ttlMs = 7 * 24 * 60 * 60 * 1000, maxPending = MAX_PENDING_CANDIDATES): Promise<number> {
   const cutoff = new Date(Date.now() - ttlMs).getTime();
   const rows = await db.select().from(schema.improvementCandidates).where(eq(schema.improvementCandidates.status, "pending"));
+
+  // ① 유효기간 경과분
   const stale = rows.filter((r) => new Date(r.createdAt).getTime() < cutoff);
   for (const r of stale) {
     await db.delete(schema.improvementCandidates).where(eq(schema.improvementCandidates.id, r.id));
   }
-  return stale.length;
+
+  // ② 상한 초과분 — 신뢰도 desc, 최신 desc 로 정렬해 상위 maxPending 만 남긴다
+  const kept = rows
+    .filter((r) => !stale.includes(r))
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const overflow = kept.slice(maxPending);
+  for (const r of overflow) {
+    await db.delete(schema.improvementCandidates).where(eq(schema.improvementCandidates.id, r.id));
+  }
+
+  return stale.length + overflow.length;
 }
 
 export interface RelatedItem { type: "prompt" | "skill" | "memory"; id: string; title: string; content: string; score: number; }

@@ -255,3 +255,43 @@ describe("에피소드 — 상세·결론 지식 저장 (영향 추적)", () => 
     expect(String(memRows[0].content)).toContain("재심사");
   });
 });
+
+describe("pruneStaleCandidates (큐 상한 50건 유지)", () => {
+  it("60건이면 신뢰도 상위 50건만 남기고 낮은 것부터 삭제한다", async () => {
+    for (let i = 0; i < 60; i++) {
+      await createCandidate({
+        personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "m", action: "create_memory",
+        proposedContent: "후보 " + i, confidence: i / 100,   // 0.00 ~ 0.59
+      });
+    }
+    expect((await listCandidates({ status: "pending" })).length).toBe(60);
+
+    const removed = await pruneStaleCandidates();
+    expect(removed).toBe(10);
+
+    const kept = await listCandidates({ status: "pending" });
+    expect(kept.length).toBe(50);
+    // 남은 것은 전부 신뢰도 상위(=0.10 이상)이고, 낮은 신뢰도(0.00~0.09)는 사라진다
+    expect(Math.min(...kept.map((c) => c.confidence))).toBeGreaterThanOrEqual(0.1);
+    expect(kept.some((c) => c.proposedContent === "후보 0")).toBe(false);
+    expect(kept.some((c) => c.proposedContent === "후보 59")).toBe(true);
+  });
+
+  it("50건 이하면 삭제하지 않는다", async () => {
+    for (let i = 0; i < 50; i++) {
+      await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "m", action: "create_memory", proposedContent: "후보 " + i, confidence: 0.7 });
+    }
+    expect(await pruneStaleCandidates()).toBe(0);
+    expect((await listCandidates({ status: "pending" })).length).toBe(50);
+  });
+
+  it("적용/거절된 후보는 상한 계산에서 제외한다(결정된 이력은 보존)", async () => {
+    await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "m", action: "create_memory", proposedContent: "적용된 후보", confidence: 0.1, status: "applied" } as any);
+    for (let i = 0; i < 50; i++) {
+      await createCandidate({ personaKey: "claims-planning", sourceKind: "admin_chat", sourceId: "m", action: "create_memory", proposedContent: "대기 " + i, confidence: 0.6 });
+    }
+    expect(await pruneStaleCandidates()).toBe(0);
+    expect((await listCandidates({ status: "applied" })).length).toBe(1);
+    expect((await listCandidates({ status: "pending" })).length).toBe(50);
+  });
+});

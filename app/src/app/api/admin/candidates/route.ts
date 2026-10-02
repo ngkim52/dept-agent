@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { requireUser, requireAdmin, jsonError, HttpError } from "@/lib/auth/http";
-import { listCandidates, createCandidate, pruneStaleCandidates, findRelatedByLLM, setCandidateRelated } from "@/lib/harness/review";
+import { listCandidates, createCandidate, pruneStaleCandidates, findRelatedByLLM, setCandidateRelated, MAX_PENDING_CANDIDATES } from "@/lib/harness/review";
 import type { HarnessEntryType } from "@/lib/db/schema";
 
 // LLM 판정용 call — 실패 시 undefined → 휴리스틱 폴백.
@@ -42,7 +42,7 @@ async function relatedFromStored(c: Awaited<ReturnType<typeof listCandidates>>[n
 
 const ACTIONS = new Set(["create_skill","update_skill","create_prompt","update_prompt","create_memory","update_memory"]);
 
-const TOP_PENDING = 50; // 대기(pending) 후보 신뢰도 상위 50건 유지
+const TOP_PENDING = MAX_PENDING_CANDIDATES; // 대기(pending) 후보 신뢰도 상위 50건 유지
 
 export async function GET(req: NextRequest) {
   try {
