@@ -3,10 +3,17 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type BriefingSource = { id: string; title: string; url: string; source: string; snippet: string; category: string };
-type BriefAction = { topic: string; summary: string; category: string; sources: string[] };
+type BriefUrgency = "즉시" | "단기" | "중기" | "";
+type BriefAction = { topic: string; summary: string; impact: string; action: string; owner: string; urgency: BriefUrgency; category: string; sources: string[] };
 type CorporateBriefing = {
   date: string; categories: string[]; executiveSummary: string; actions: BriefAction[];
   sources: BriefingSource[]; flags: { engine: string; sourceCount: number; llm: boolean };
+};
+
+const URGENCY_STYLE: Record<string, string> = {
+  "즉시": "bg-pale-red text-pale-red-text",
+  "단기": "bg-pale-amber text-pale-amber-text",
+  "중기": "bg-pale-green text-pale-green-text",
 };
 
 const CAT_COLOR: Record<string, string> = {
@@ -54,8 +61,8 @@ export default function Briefing() {
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-4xl font-semibold tracking-tight text-ink">업계동향 브리핑</h1>
-          <p className="mt-1 text-sm text-ink-soft">생명·손해보험회사 및 보험업계(금감원·금융위) 뉴스를 실시간 검색해, 우리 부서가 참고·검토할 내용을 정리합니다.</p>
-          {fetchedAt && <p className="mt-1 font-mono text-[11px] text-ink-faint">조회 시각 {new Date(fetchedAt).toLocaleString("ko-KR")} · 새로고침 전 30분 캐시</p>}
+          <p className="mt-1 text-sm text-ink-soft">생명·손해보험회사 및 보험업계(금감원·금융위) 뉴스를 실시간 검색해, 신한라이프가 대비·준비해야 할 내용을 정리합니다.</p>
+          {fetchedAt && <p className="mt-1 font-mono text-[11px] text-ink-faint">생성 시각 {new Date(fetchedAt).toLocaleString("ko-KR")} · 하루 1회 자동 생성(같은 날은 캐시) · "다시 조회"로 즉시 갱신</p>}
         </div>
         <button onClick={() => load(true)} disabled={busy}
           className="inline-flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-deep disabled:opacity-50">
@@ -84,7 +91,7 @@ export default function Briefing() {
           {/* Actions — 검토해야 할 내용 */}
           {b.actions.length > 0 && (
             <section className="mt-6">
-              <h2 className="mb-3 font-serif text-lg font-semibold text-ink">우리 부서가 참고·검토할 내용</h2>
+              <h2 className="mb-3 font-serif text-lg font-semibold text-ink">신한라이프가 대비·준비할 내용</h2>
               <div className="space-y-3">
                 {b.actions.map((a, i) => {
                   const color = CAT_COLOR[a.category] ?? "#1F6C9F";
@@ -95,9 +102,18 @@ export default function Briefing() {
                         <div className="mb-1 flex flex-wrap items-center gap-2">
                           <span className="font-mono text-[10px] text-ink-faint">{String(i + 1).padStart(2, "0")}</span>
                           {a.category && <span style={{ color, background: color + "1a", borderColor: color + "40" }} className="rounded-full border px-2 py-0.5 font-mono text-[10px]">{a.category}</span>}
+                          {a.urgency && <span className={`rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold ${URGENCY_STYLE[a.urgency] ?? "bg-canvas text-ink-soft"}`}>{a.urgency}</span>}
+                          {a.owner && <span className="rounded-full border border-line px-2 py-0.5 font-mono text-[10px] text-ink-soft">담당 {a.owner}</span>}
                         </div>
                         <p className="font-serif text-[15px] font-semibold text-ink">{a.topic}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-ink-soft">{a.summary}</p>
+                        {a.summary && <p className="mt-1 text-xs leading-relaxed text-ink-soft"><span className="mr-1 font-semibold text-ink-faint">동향</span>{a.summary}</p>}
+                        {a.impact && <p className="mt-1 text-xs leading-relaxed text-ink-soft"><span className="mr-1 font-semibold text-ink-faint">영향</span>{a.impact}</p>}
+                        {a.action && (
+                          <div className="mt-2 rounded-lg border-l-2 border-accent bg-accent-soft/40 px-3 py-2">
+                            <p className="font-mono text-[10px] font-semibold uppercase tracking-wide text-accent">신한라이프 대비·준비</p>
+                            <p className="mt-1 text-[13px] leading-relaxed text-ink">{a.action}</p>
+                          </div>
+                        )}
                         {linked.length > 0 && (
                           <div className="mt-2 space-y-1">
                             {linked.map((s) => (
