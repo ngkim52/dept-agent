@@ -3,6 +3,9 @@ import { db, schema } from "@/lib/db";
 import { randomUUID } from "node:crypto";
 
 export async function resetDb() {
+  await db.delete(schema.debateMessages);
+  await db.delete(schema.debateSessions);
+  await db.delete(schema.debatePersonas);
   await db.delete(schema.messages);
   await db.delete(schema.sessions);
   await db.delete(schema.conversations);

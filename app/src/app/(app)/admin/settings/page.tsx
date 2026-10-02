@@ -36,6 +36,15 @@ export default function SettingsPage() {
   const [gateways, setGateways] = useState<{ id: string; label: string; baseUrl: string; hasKey: boolean }[]>([]);
   const [activeGateway, setActiveGateway] = useState("openrouter");
 
+  // ── 토론방 페르소나별 모델 설정 ──
+  type PersonaModelRow = { key: string; name: string; emoji: string; role: string; kind: string; builtin: boolean; override: { model: string; gateway: string } | null; effective: { model: string; gateway: string }; source: string };
+  const [personaModels, setPersonaModels] = useState<PersonaModelRow[]>([]);
+  const [personaDrafts, setPersonaDrafts] = useState<Record<string, { model: string; gateway: string }>>({});
+  const [personaDefault, setPersonaDefault] = useState<{ model: string; gateway: string }>({ model: "", gateway: "litellm" });
+  const [personaLoading, setPersonaLoading] = useState(false);
+  const [personaError, setPersonaError] = useState("");
+  const [personaSaved, setPersonaSaved] = useState("");
+
   // ── 부서↔데이터셋 설정 ──
   const [deptData, setDeptData] = useState<{ id: string; name: string; datasetIds: string[] }[]>([]);
   const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
@@ -56,6 +65,7 @@ export default function SettingsPage() {
       if (d.user.role !== "admin") { router.replace("/chat"); return; }
       load();
       loadModelConfig();
+      loadPersonaModels();
       loadDeptData();
     });
   }, [router]);
@@ -95,6 +105,42 @@ export default function SettingsPage() {
       }
       setModelDrafts(drafts);
     } catch { setModelError("설정 조회 실패"); }
+  }
+
+  // ── 토론방 페르소나별 모델 ──
+  async function loadPersonaModels() {
+    setPersonaLoading(true); setPersonaError(""); setPersonaSaved("");
+    try {
+      const d = await (await fetch("/api/admin/models/personas")).json();
+      if (d.error) { setPersonaError(d.error); return; }
+      const rows: PersonaModelRow[] = d.personas ?? [];
+      setPersonaModels(rows);
+      setPersonaDefault(d.defaultSelection ?? { model: "", gateway: "litellm" });
+      const drafts: Record<string, { model: string; gateway: string }> = {};
+      for (const r of rows) if (r.override) drafts[r.key] = { model: r.override.model, gateway: r.override.gateway };
+      setPersonaDrafts(drafts);
+    } catch { setPersonaError("페르소나 모델 설정 조회 실패"); }
+    finally { setPersonaLoading(false); }
+  }
+
+  async function savePersonaModels() {
+    setPersonaSaved(""); setPersonaError("");
+    try {
+      const overrides: Record<string, { model: string; gateway: string } | null> = {};
+      for (const r of personaModels) {
+        const draft = personaDrafts[r.key];
+        overrides[r.key] = draft && draft.model ? { model: draft.model, gateway: draft.gateway } : null;
+      }
+      const res = await fetch("/api/admin/models/personas", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ overrides }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { setPersonaError(d.error ?? "저장 실패"); return; }
+      setPersonaSaved("저장 완료 — 다음 토론 발언부터 적용됩니다");
+      loadPersonaModels();
+    } catch { setPersonaError("저장 실패"); }
   }
 
   async function loadDeptData() {
@@ -367,6 +413,75 @@ export default function SettingsPage() {
           <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink-faint">
             API 키는 환경변수(LLM_API_KEY)로만 보관됩니다. UI에는 저장되지 않습니다. 모델 목록은 서버에서 조회됩니다.
           </p>
+        </div>
+
+        {/* ── 토론방 페르소나별 모델 ── */}
+        <div className="mt-12 border-t border-line pt-8">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs uppercase tracking-[0.25em] text-ink-faint">Admin · 토론방</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold tracking-tight text-ink">페르소나별 모델</h2>
+              <p className="mt-1 text-sm text-ink-soft">토론방에서 각 페르소나가 발언할 때 쓸 모델을 따로 지정합니다. 미지정이면 ‘간단 응답’ 용도 모델을 사용합니다.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={loadPersonaModels} disabled={personaLoading}
+                className="lift rounded-md border border-line-strong bg-surface px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-accent-soft hover:text-accent disabled:opacity-50">
+                {personaLoading ? "불러오는 중…" : "새로고침"}
+              </button>
+              <button onClick={savePersonaModels}
+                className="lift rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#33312E]">
+                저장
+              </button>
+            </div>
+          </div>
+
+          {personaError && <p role="alert" className="mt-4 rounded-md bg-pale-red px-3 py-2 text-xs leading-relaxed text-pale-red-text">{personaError}</p>}
+          {personaSaved && <p className="mt-4 rounded-md bg-pale-green px-3 py-2 text-xs leading-relaxed text-pale-green-text">{personaSaved}</p>}
+
+          <p className="mt-4 font-mono text-[11px] leading-relaxed text-ink-faint">
+            기본값(미지정): <span className="text-ink-soft">{personaDefault.model ? `${personaDefault.gateway}·${personaDefault.model}` : "(용도별 simple 설정 사용)"}</span>
+            {" · "}모델 목록은 위 ‘용도별 LLM 모델’에서 게이트웨이를 고른 뒤 ‘목록 불러오기’를 누르면 채워집니다.
+          </p>
+
+          <div className="mt-4 space-y-2">
+            {personaModels.map((p) => {
+              const draft = personaDrafts[p.key];
+              const selected = draft?.model ?? "";
+              const effLabel = p.effective?.model ? `${p.effective.gateway === "openrouter" ? "OR" : "LT"}·${p.effective.model}` : "(기본값)";
+              const pending = selected !== (p.override?.model ?? "");
+              return (
+                <div key={p.key} className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-canvas text-base">{p.emoji}</span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">
+                        {p.name}
+                        {!p.builtin && <span className="ml-1.5 rounded-full bg-accent-soft px-1.5 py-0.5 font-mono text-[10px] text-accent">커스텀</span>}
+                        {p.kind === "observer" && <span className="ml-1.5 rounded-full bg-canvas px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">옵저버</span>}
+                        {p.kind === "conclusion" && <span className="ml-1.5 rounded-full bg-canvas px-1.5 py-0.5 font-mono text-[10px] text-ink-faint">결론</span>}
+                      </p>
+                      <p className="truncate text-[11px] text-ink-faint">
+                        {p.role || "—"} · 적용: <span className="text-ink-soft">{effLabel}</span>
+                        {pending && <span className="ml-1 text-pale-amber-text">(저장 대기)</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <select value={selected} onChange={(e) => setPersonaDrafts((d) => ({ ...d, [p.key]: { model: e.target.value, gateway: activeGateway } }))}
+                    className="min-w-[220px] rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-accent">
+                    <option value="">(기본값 사용)</option>
+                    {models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                  {p.override && (
+                    <button onClick={() => setPersonaDrafts((d) => ({ ...d, [p.key]: { model: "", gateway: activeGateway } }))}
+                      className="rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-xs text-ink-soft transition-colors hover:bg-pale-red hover:text-pale-red-text">
+                      지정 해제
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {personaModels.length === 0 && !personaLoading && <p className="text-xs text-ink-faint">페르소나를 불러오지 못했습니다.</p>}
+          </div>
         </div>
 
         {/* ── 부서 ↔ RAGFlow 데이터셋 연동 ── */}

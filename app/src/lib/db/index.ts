@@ -92,6 +92,46 @@ try {
   CREATE INDEX IF NOT EXISTS director_schedule_date_idx ON director_schedule (date);`);
 } catch { /* 무시 */ }
 
+// Debate Room(019) 물리 테이블 보장
+try {
+  sqlite.exec(`CREATE TABLE IF NOT EXISTS debate_sessions (
+    id text PRIMARY KEY NOT NULL, title text NOT NULL, brief text DEFAULT '' NOT NULL,
+    status text DEFAULT 'draft' NOT NULL, duration_sec integer DEFAULT 180 NOT NULL,
+    participant_keys text DEFAULT '[]' NOT NULL, round integer DEFAULT 0 NOT NULL,
+    turn_count integer DEFAULT 0 NOT NULL, max_turns integer DEFAULT 80 NOT NULL,
+    attachment_name text,
+    verdict text, report_path text, created_by text, started_at integer, ended_at integer,
+    created_at integer NOT NULL, updated_at integer NOT NULL);
+  CREATE INDEX IF NOT EXISTS debate_sessions_status_idx ON debate_sessions (status);
+  CREATE TABLE IF NOT EXISTS debate_messages (
+    id text PRIMARY KEY NOT NULL, session_id text NOT NULL, seq integer NOT NULL,
+    persona_key text NOT NULL, persona_name text NOT NULL, persona_emoji text DEFAULT '' NOT NULL,
+    persona_color text DEFAULT '#1F6C9F' NOT NULL, kind text DEFAULT 'member' NOT NULL,
+    round integer DEFAULT 1 NOT NULL, content text NOT NULL,
+    emotion text, satisfaction integer, stance text, inner_thought text,
+    created_at integer NOT NULL);
+  CREATE INDEX IF NOT EXISTS debate_messages_session_idx ON debate_messages (session_id, seq);
+  CREATE TABLE IF NOT EXISTS debate_personas (
+    id text PRIMARY KEY NOT NULL, name text NOT NULL, emoji text DEFAULT '🙂' NOT NULL,
+    role text DEFAULT '' NOT NULL, stance text DEFAULT '' NOT NULL,
+    expertise text DEFAULT '' NOT NULL, goal text DEFAULT '' NOT NULL, red_line text DEFAULT '' NOT NULL,
+    tone text DEFAULT '' NOT NULL,
+    color text DEFAULT '#1F6C9F' NOT NULL, system_prompt text DEFAULT '' NOT NULL,
+    active integer DEFAULT 1 NOT NULL, created_by text, created_at integer NOT NULL);`);
+} catch { /* 무시 */ }
+
+// Debate Room 페르소나 필드/첨부파일 컬럼 보강 (0011) — 기존 DB에도 멱등 반영
+try { sqlite.exec(`ALTER TABLE debate_sessions ADD COLUMN attachment_name text;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE debate_personas ADD COLUMN expertise text DEFAULT '' NOT NULL;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE debate_personas ADD COLUMN goal text DEFAULT '' NOT NULL;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE debate_personas ADD COLUMN red_line text DEFAULT '' NOT NULL;`); } catch { /* 이미 존재 */ }
+
+// Debate Room 발언 상태(감정/만족도/입장/속마음) 컬럼 보강 (0012) — 기존 DB에도 멱등 반영
+try { sqlite.exec(`ALTER TABLE debate_messages ADD COLUMN emotion text;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE debate_messages ADD COLUMN satisfaction integer;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE debate_messages ADD COLUMN stance text;`); } catch { /* 이미 존재 */ }
+try { sqlite.exec(`ALTER TABLE debate_messages ADD COLUMN inner_thought text;`); } catch { /* 이미 존재 */ }
+
 // director_schedule 컬럼 보강 (참석자·장소) — 기존 DB에도 멱등 반영
 try { sqlite.exec(`ALTER TABLE director_schedule ADD COLUMN attendees text;`); } catch { /* 이미 존재 */ }
 try { sqlite.exec(`ALTER TABLE director_schedule ADD COLUMN location text;`); } catch { /* 이미 존재 */ }

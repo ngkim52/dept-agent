@@ -175,3 +175,19 @@ body {
 .prose-simple a { color: var(--color-accent); text-decoration: underline; }
 .prose-simple hr { border: none; border-top: 1px solid var(--color-line); margin: 1.2em 0; }
 .prose-simple strong { font-weight: 700; }
+
+.prose-simple table {
+  width: 100%; border-collapse: collapse; margin: .8em 0; font-size: .92em;
+}
+.prose-simple th, .prose-simple td {
+  border: 1px solid var(--color-line); padding: .45em .6em; text-align: left; vertical-align: top;
+}
+.prose-simple th { background: var(--color-canvas); font-weight: 600; color: var(--color-ink); }
+
+.debate-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong, #cfcac2) transparent;
+}
+.debate-scroll::-webkit-scrollbar { width: 8px; }
+.debate-scroll::-webkit-scrollbar-thumb { background: var(--color-line-strong, #cfcac2); border-radius: 999px; }
+.debate-scroll::-webkit-scrollbar-track { background: transparent; }

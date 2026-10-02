@@ -36,8 +36,8 @@ export default function MarkdownViewer({ content, className = "" }: { content: s
     if (para.length) { out.push(`<p>${para.map(inline).join("<br/>")}</p>`); para = []; }
   };
 
-  for (const raw of lines) {
-    const l = raw;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
     const t = l.trim();
     // code fence
     if (/^```/.test(t)) {
@@ -67,6 +67,28 @@ export default function MarkdownViewer({ content, className = "" }: { content: s
       // nested via leading spaces ignored
       listBuf.push(listItem(om ? om[2] : um![1], ord));
       continue;
+    }
+    // table: | a | b |  (구분선 행 |---| 은 건너뜀)
+    if (/^\|.*\|$/.test(t)) {
+      const rows: string[][] = [];
+      let j = i;
+      while (j < lines.length && /^\|.*\|$/.test(lines[j].trim())) {
+        const cells = lines[j].trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+        const isSeparator = cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
+        if (!isSeparator) rows.push(cells);
+        j++;
+      }
+      if (rows.length) {
+        flushList(); flushPara();
+        const head = rows[0];
+        const body = rows.slice(1);
+        out.push(
+          `<table><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead>` +
+          `<tbody>${body.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+        );
+        i = j - 1;
+        continue;
+      }
     }
     // plain paragraph line
     flushList();

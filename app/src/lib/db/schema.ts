@@ -372,3 +372,70 @@ export type NewDirectorSchedule = typeof directorSchedule.$inferInsert;
 
 export type WorkTask = typeof workTasks.$inferSelect;
 export type NewWorkTask = typeof workTasks.$inferInsert;
+
+
+// ── Debate Room: 페르소나 난상토론 (019) ──
+export const debateSessions = sqliteTable("debate_sessions", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),                       // 안건 제목
+  brief: text("brief").notNull().default(""),           // 기획안/배경 원문
+  status: text("status", { enum: ["draft", "running", "finished", "stopped", "failed"] })
+    .notNull().default("draft"),
+  durationSec: integer("duration_sec").notNull().default(180),
+  participantKeys: text("participant_keys").notNull().default("[]"), // JSON 문자열 배열
+  round: integer("round").notNull().default(0),
+  turnCount: integer("turn_count").notNull().default(0),
+  maxTurns: integer("max_turns").notNull().default(80),
+  attachmentName: text("attachment_name"),              // 업로드한 기획안 파일명(선택)
+  verdict: text("verdict"),                             // 최종 판정 한 줄
+  reportPath: text("report_path"),                      // MD 파일 경로
+  createdBy: text("created_by"),
+  startedAt: integer("started_at", { mode: "timestamp" }),
+  endedAt: integer("ended_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({ dsStatusIdx: index("debate_sessions_status_idx").on(t.status) }));
+
+export const debateMessages = sqliteTable("debate_messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().references(() => debateSessions.id),
+  seq: integer("seq").notNull(),                        // 1부터 증가, 폴링 커서
+  personaKey: text("persona_key").notNull(),
+  personaName: text("persona_name").notNull(),
+  personaEmoji: text("persona_emoji").notNull().default(""),
+  personaColor: text("persona_color").notNull().default("#1F6C9F"),
+  kind: text("kind", { enum: ["member", "observer", "conclusion", "system"] }).notNull().default("member"),
+  round: integer("round").notNull().default(1),
+  content: text("content").notNull(),
+  emotion: text("emotion"),                      // 기대|만족|중립|우려|불만|단호
+  satisfaction: integer("satisfaction"),         // 0~100 (안건 수용도)
+  stance: text("stance"),                        // 찬성|조건부|반대|유보
+  innerThought: text("inner_thought"),           // 속마음(발언에 드러내지 않은 판단)
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+}, (t) => ({
+  dmSessionIdx: index("debate_messages_session_idx").on(t.sessionId, t.seq),
+}));
+
+export const debatePersonas = sqliteTable("debate_personas", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  emoji: text("emoji").notNull().default("🙂"),
+  role: text("role").notNull().default(""),
+  stance: text("stance").notNull().default(""),
+  expertise: text("expertise").notNull().default(""),   // 근거로 삼는 전문 영역
+  goal: text("goal").notNull().default(""),             // 토론에서 얻으려는 것
+  redLine: text("red_line").notNull().default(""),      // 양보할 수 없는 선
+  tone: text("tone").notNull().default(""),
+  color: text("color").notNull().default("#1F6C9F"),
+  systemPrompt: text("system_prompt").notNull().default(""), // 추가 지침
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdBy: text("created_by"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export type DebateSessionRow = typeof debateSessions.$inferSelect;
+export type NewDebateSessionRow = typeof debateSessions.$inferInsert;
+export type DebateMessageRow = typeof debateMessages.$inferSelect;
+export type NewDebateMessageRow = typeof debateMessages.$inferInsert;
+export type DebatePersonaRow = typeof debatePersonas.$inferSelect;
+export type NewDebatePersonaRow = typeof debatePersonas.$inferInsert;
