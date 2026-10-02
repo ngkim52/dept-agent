@@ -23,7 +23,6 @@ const TOOL_LABELS: Record<string, string> = {
 /* ---- 부서(페르소나) 표현 ---- */
 const PERSONAS: Record<string, { name: string; mono: string }> = {
   "claims-planning": { name: "보험금기획 부서장", mono: "심" },
-  actuarial: { name: "계리 부서장", mono: "계" },
 };
 const PERSONA_DEFAULT = { name: "부서장", mono: "부" };
 
@@ -700,14 +699,7 @@ export default function ChatPage() {
   const effectiveDeptId = activeConvDeptId || (user?.role === "admin" ? activeDepartmentId : user?.departmentId);
   const persona = personaOf(effectiveDeptId);
 
-  const isActuarial = persona === personaOf("actuarial");
-  const examples = isActuarial ? [
-    "준비금 산출 가정(이율·해지율) 검증안을 검토해 주세요",
-    "신상품 요율 산출 시 리스크를 짚어 주세요",
-    "재무건전성(RBC) 분석 방안을 제안해 주세요",
-    "영업보험료·준비금 적립 방식 변경 영향 검토를 제안해 주세요",
-    "최근 유사 사업·준비금 추정치 비교분석을 검토해 주세요",
-  ] : [
+  const examples = [
     "지급보험금 손해율이 계획 대비 5% 넘어 원인 분석 방법을 제안해 주세요",
     "AI 자동 심사 도입 시 리스크를 짚어 주세요",
     "지급보험금 품질 점검 샘플링(13%) 기준 항목 검토를 제안해 주세요",

@@ -10,7 +10,11 @@ export async function GET(req: NextRequest) {
   try {
     const admin = await requireUser(req);
     requireAdmin(admin);
-    const departments = await db.query.departments.findMany({ orderBy: (d, { asc }) => [asc(d.name)] });
+    // 비활성(사용 중지) 부서는 관리 화면에서도 노출하지 않는다.
+    const departments = await db.query.departments.findMany({
+      where: eq(schema.departments.isActive, true),
+      orderBy: (d, { asc }) => [asc(d.name)],
+    });
     let datasets: { id: string; name: string }[] = [];
     try {
       datasets = await ragflow.listDatasets().catch(() => [] as { id: string; name: string }[]);

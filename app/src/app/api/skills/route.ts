@@ -7,10 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await requireUser(req);
     const departmentId = user.role === "admin" ? null : user.departmentId;
-    const skills = departmentId ? getPersonaSkills(departmentId) : [
-      ...getPersonaSkills("claims-planning"),
-      ...getPersonaSkills("actuarial"),
-    ];
+    const skills = departmentId ? getPersonaSkills(departmentId) : getPersonaSkills("claims-planning");
     return Response.json({
       skills: skills.map((s) => ({ name: s.name, description: s.description })),
       features: [

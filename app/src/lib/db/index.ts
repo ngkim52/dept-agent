@@ -178,7 +178,6 @@ async function ensureSeed() {
     const { eq, and } = await import("drizzle-orm");
     const DEPTS = [
       { id: "claims-planning", name: "보험금기획", personaKey: "claims-planning" },
-      { id: "actuarial", name: "계리", personaKey: "actuarial" },
     ];
     for (const dep of DEPTS) {
       const exists = await db.query.departments.findFirst({ where: eq(departments.id, dep.id) });
